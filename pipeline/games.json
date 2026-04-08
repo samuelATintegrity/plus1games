@@ -79,10 +79,10 @@
     "playerCount": 2,
     "buildComplexity": "medium",
     "artStyleNotes": "Sunset beach vibe. Sandy court with faint lane lines, ocean horizon, palm tree silhouettes on either side, a setting sun behind the net. Warm palette: cream sand, coral pink sky, teal water, deep orange sun. Ball is a pixel-art volleyball with subtle shading. Chunky 16x16 pixel art. Scanlines optional. UI in a retro SNES sports-game font.",
-    "status": "approved",
+    "status": "deployed",
     "createdAt": "2026-04-08T17:00:00.000Z",
     "approvedAt": "2026-04-08T17:00:00.000Z",
-    "deployedAt": null
+    "deployedAt": "2026-04-08T17:30:00.000Z"
   },
   {
     "id": "rhythm-relay",

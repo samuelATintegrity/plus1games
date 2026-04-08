@@ -1,9 +1,9 @@
 name: Daily Game Build
 
 on:
-  schedule:
-    # 14:00 UTC = 9am ET / 6am PT, every day
-    - cron: "0 14 * * *"
+  # Cron disabled — games are now built locally via Claude Code on the user's
+  # desktop (free under the Claude subscription instead of pay-per-token API).
+  # The workflow is kept around as a manual fallback via "Run workflow" only.
   workflow_dispatch: {}
 
 jobs:

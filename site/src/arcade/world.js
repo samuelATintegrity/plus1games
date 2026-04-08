@@ -5,7 +5,13 @@
 // Schema: { id, name, x, y, gameRoute }
 
 export const machines = [
-  // Populated as games are deployed. Empty for now.
+  {
+    id: 'pong-beach-volleyball',
+    name: 'Pong: Beach Volleyball',
+    x: 80,
+    y: 120,
+    gameRoute: '/games/pong-beach-volleyball',
+  },
 ];
 
 // Logical world dimensions (GameBoy native res).
