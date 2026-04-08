@@ -1,0 +1,17 @@
+{
+  "id": "_template",
+  "name": "Template",
+  "originalBaseGame": "",
+  "coopSpin": "",
+  "winRules": "",
+  "turnRules": "real-time",
+  "moveRules": "",
+  "setupInstructions": "",
+  "playerCount": 2,
+  "buildComplexity": "small",
+  "artStyleNotes": "",
+  "status": "brainstormed",
+  "createdAt": null,
+  "approvedAt": null,
+  "deployedAt": null
+}

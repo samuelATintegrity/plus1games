@@ -1,0 +1,12 @@
+{
+  "name": "plus1games-partykit",
+  "private": true,
+  "version": "0.0.1",
+  "scripts": {
+    "dev": "partykit dev",
+    "deploy": "partykit deploy"
+  },
+  "devDependencies": {
+    "partykit": "^0.0.114"
+  }
+}

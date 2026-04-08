@@ -1,0 +1,50 @@
+name: Post-merge — mark deployed
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "site/src/games/**"
+      - "pipeline/games.json"
+
+jobs:
+  mark-deployed:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install pipeline deps
+        working-directory: pipeline
+        run: npm install --no-audit --no-fund
+
+      - name: Flip any 'testing' games to 'deployed'
+        run: |
+          node -e "
+            import('./pipeline/lib/games-db.js').then(({ loadAll, setStatus }) => {
+              const testing = loadAll().filter(g => g.status === 'testing');
+              for (const g of testing) {
+                console.log('Marking deployed:', g.id);
+                setStatus(g.id, 'deployed');
+              }
+            });
+          "
+
+      - name: Commit status update
+        run: |
+          if git diff --quiet pipeline/games.json; then
+            echo "No status changes to commit."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add pipeline/games.json
+          git commit -m "Mark deployed games"
+          git push

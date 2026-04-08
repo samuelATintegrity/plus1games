@@ -1,0 +1,17 @@
+{
+  "name": "plus1games-pipeline",
+  "private": true,
+  "version": "0.0.1",
+  "type": "module",
+  "scripts": {
+    "brainstorm": "node brainstorm/brainstorm.js",
+    "build-daily": "node build/build-daily.js",
+    "pick": "node build/build-daily.js --pick"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.32.1",
+    "ajv": "^8.17.1",
+    "ajv-formats": "^3.0.1",
+    "dotenv": "^16.4.5"
+  }
+}

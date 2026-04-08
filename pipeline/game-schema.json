@@ -1,0 +1,76 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Plus1 Game Spec",
+  "description": "Schema for a single co-op game spec used by the plus1.games pipeline.",
+  "type": "object",
+  "required": [
+    "id",
+    "name",
+    "originalBaseGame",
+    "coopSpin",
+    "winRules",
+    "turnRules",
+    "moveRules",
+    "setupInstructions",
+    "playerCount",
+    "buildComplexity",
+    "artStyleNotes",
+    "status"
+  ],
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$",
+      "description": "Kebab-case unique id, also used as the folder name under site/src/games/."
+    },
+    "name": {
+      "type": "string",
+      "description": "Display name."
+    },
+    "originalBaseGame": {
+      "type": "string",
+      "description": "The classic game this is based on, e.g. 'Tetris', 'Snake'."
+    },
+    "coopSpin": {
+      "type": "string",
+      "description": "How the two-player co-op twist works."
+    },
+    "winRules": {
+      "type": "string",
+      "description": "How a round ends and how victory is determined."
+    },
+    "turnRules": {
+      "type": "string",
+      "enum": ["simultaneous", "alternating", "real-time"],
+      "description": "Turn structure."
+    },
+    "moveRules": {
+      "type": "string",
+      "description": "What actions each player can take."
+    },
+    "setupInstructions": {
+      "type": "string",
+      "description": "Initial state and any pre-game setup."
+    },
+    "playerCount": {
+      "type": "integer",
+      "const": 2
+    },
+    "buildComplexity": {
+      "type": "string",
+      "enum": ["trivial", "small", "medium", "large"],
+      "description": "Rough estimate of how much work it is to build."
+    },
+    "artStyleNotes": {
+      "type": "string",
+      "description": "Visual direction — palette, sprite size, references."
+    },
+    "status": {
+      "type": "string",
+      "enum": ["brainstormed", "approved", "building", "testing", "deployed"]
+    },
+    "createdAt":   { "type": ["string", "null"], "format": "date-time" },
+    "approvedAt":  { "type": ["string", "null"], "format": "date-time" },
+    "deployedAt":  { "type": ["string", "null"], "format": "date-time" }
+  }
+}

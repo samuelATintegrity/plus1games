@@ -1,0 +1,69 @@
+name: Daily Game Build
+
+on:
+  schedule:
+    # 14:00 UTC = 9am ET / 6am PT, every day
+    - cron: "0 14 * * *"
+  workflow_dispatch: {}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install pipeline deps
+        working-directory: pipeline
+        run: npm install --no-audit --no-fund
+
+      - name: Pick next approved game
+        id: pick
+        run: |
+          GAME_ID=$(node pipeline/build/build-daily.js --pick)
+          if [ -z "$GAME_ID" ]; then
+            echo "No approved games waiting. Nothing to build today."
+            echo "game_id=" >> $GITHUB_OUTPUT
+          else
+            echo "Picked: $GAME_ID"
+            echo "game_id=$GAME_ID" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Mark game as building
+        if: steps.pick.outputs.game_id != ''
+        run: node pipeline/build/build-daily.js --mark-building
+
+      - name: Run Claude Code to build the game
+        if: steps.pick.outputs.game_id != ''
+        uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          prompt_file: pipeline/build/build-prompt.md
+        env:
+          GAME_ID: ${{ steps.pick.outputs.game_id }}
+
+      - name: Open pull request
+        if: steps.pick.outputs.game_id != ''
+        uses: peter-evans/create-pull-request@v6
+        with:
+          branch: build/${{ steps.pick.outputs.game_id }}
+          commit-message: "Build: ${{ steps.pick.outputs.game_id }}"
+          title: "Build: ${{ steps.pick.outputs.game_id }}"
+          body: |
+            Auto-built by the daily pipeline.
+
+            Game id: `${{ steps.pick.outputs.game_id }}`
+
+            Cloudflare Pages will post a preview URL on this PR shortly.
+            Play the preview with a friend, then merge to deploy to plus1.games.
+          delete-branch: true
