@@ -1,18 +1,21 @@
-// Pong: Beach Volleyball — a co-op twist on classic Pong.
+// Pong: Beach Volleyball — a symmetric 2v2 volleyball twist on Pong.
 //
-// Two players share the entire near court and must play volleyball rules:
-// exactly 3 hits per side before the ball crosses the net. On hits 1 and 2
-// the ball auto-arcs toward whichever teammate did NOT just touch it,
-// forcing the bump-set rhythm. Hit 3 auto-launches as a fast spike across
-// the net at the AI. You literally can't solo it — the ball always flies to
-// your partner.
+// Top-down aerial view of a sandy beach court. The "net" is just a dashed
+// line — the ball always crosses it freely. Scoring is pure Pong: get the
+// ball past the opponent's back edge. But BOTH SIDES play volleyball rules:
+// exactly 3 touches before the ball must cross the midline, no single
+// player can touch it twice in a row, and hits 1 and 2 auto-arc toward the
+// other teammate (bump → set) while hit 3 auto-launches as a rocket punch.
 //
-// v1 uses LOCAL hotseat multiplayer (both players share one keyboard):
+// While a side is mid-rally (hits 1 or 2), a "court gravity" drags the ball
+// toward that side's own back wall. This gives the bump/set a real
+// volleyball arc in top-down, AND creates genuine risk: if your partner
+// doesn't move to receive the pass, the ball drifts backward off your own
+// edge and you lose the point.
+//
+// Controls — hotseat (one shared keyboard):
 //   Player 1: WASD
 //   Player 2: Arrow keys
-// This keeps latency at zero, which really matters for fast reflex play.
-// Networked play via `connect({ type: 'roomCode' })` can be added later —
-// see site/src/multiplayer/README.md for the API.
 
 import { useEffect, useRef, useState } from 'react';
 
@@ -22,18 +25,20 @@ const LOGICAL_W = 320;
 const LOGICAL_H = 240;
 const SCALE = 3;
 
-const FLOOR_Y = 220;
-const NET_X = LOGICAL_W / 2;
-const NET_TOP = 130;
-const NET_BOTTOM = FLOOR_Y;
+const COURT_TOP = 28;
+const COURT_BOTTOM = LOGICAL_H - 12;
+const MID_X = LOGICAL_W / 2;
 
-const GRAVITY = 560;         // px/s^2
 const PLAYER_RADIUS = 10;
 const BALL_RADIUS = 5;
-const PLAYER_SPEED = 180;    // px/s
-const AI_SPEED = 150;        // px/s
+const PLAYER_SPEED = 170;   // px/s
+const AI_SPEED = 135;       // px/s — slightly slower so the AI can whiff
 
-const WIN_SCORE = 15;
+const BOUNCE_PASS_SPEED = 180;
+const ROCKET_SPEED = 380;
+const COURT_GRAVITY = 130;  // px/s² lateral pull toward the rallying side's back wall
+
+const WIN_SCORE = 7;
 
 // GameBoy DMG palette (from tailwind.config.js `gb`)
 const C = {
@@ -43,18 +48,14 @@ const C = {
   lightest: '#9bbc0f',
 };
 
-// ---- physics helpers --------------------------------------------------------
+// ---- helpers ----------------------------------------------------------------
 
-// Launch the ball on a parabolic arc from its current position to (tx, ty)
-// such that it reaches the target after T seconds under gravity.
-function arcBallTo(ball, tx, ty, T = 0.65) {
-  ball.vx = (tx - ball.x) / T;
-  ball.vy = (ty - ball.y - 0.5 * GRAVITY * T * T) / T;
-}
-
-function spike(ball) {
-  ball.vx = 380;
-  ball.vy = 20 + Math.random() * 60; // slightly downward, varied
+function sendBallTo(ball, tx, ty, speed) {
+  const dx = tx - ball.x;
+  const dy = ty - ball.y;
+  const d = Math.sqrt(dx * dx + dy * dy) || 1;
+  ball.vx = (dx / d) * speed;
+  ball.vy = (dy / d) * speed;
 }
 
 function circleHit(ball, p) {
@@ -67,17 +68,19 @@ function circleHit(ball, p) {
 // ---- initial state ----------------------------------------------------------
 
 function makeInitialState() {
+  const midY = (COURT_TOP + COURT_BOTTOM) / 2;
   return {
-    p1: { x: 70, y: FLOOR_Y - PLAYER_RADIUS - 5 },
-    p2: { x: 110, y: FLOOR_Y - PLAYER_RADIUS - 5 },
-    ai: { x: LOGICAL_W - 60, y: FLOOR_Y - PLAYER_RADIUS - 5 },
-    ball: { x: LOGICAL_W - 50, y: 70, vx: -130, vy: 20 },
+    p1:  { x: 60,  y: midY - 28 },
+    p2:  { x: 60,  y: midY + 28 },
+    ai1: { x: LOGICAL_W - 60, y: midY - 28 },
+    ai2: { x: LOGICAL_W - 60, y: midY + 28 },
+    ball: { x: MID_X, y: midY, vx: -210, vy: 40, rocket: false },
     score: { team: 0, ai: 0 },
-    teamHits: 0,
-    lastToucher: null,     // 'p1' | 'p2' | 'ai' | null
-    lastSide: 'ai',        // 'team' | 'ai'
-    touchCooldown: 0,      // seconds
-    serveTimer: 0.8,       // delay before the first serve moves
+    hits: 0,
+    lastToucher: null,   // 'p1' | 'p2' | 'ai1' | 'ai2' | null
+    lastSide: 'ai',      // 'team' | 'ai' — current half the ball is on
+    touchCooldown: 0,
+    serveTimer: 0.9,
   };
 }
 
@@ -90,20 +93,17 @@ export default function PongBeachVolleyball() {
   const phaseRef = useRef('menu');
   const [phase, setPhase] = useState('menu');
 
-  // Keep phaseRef in sync with phase state (used by stable RAF loop).
   useEffect(() => { phaseRef.current = phase; }, [phase]);
 
-  // Keyboard listeners — stable, no phase dep.
+  // Keyboard — stable listener, no phase dep.
   useEffect(() => {
     const down = (e) => {
       keysRef.current[e.code] = true;
-      // Space / Enter starts or restarts the game from menu / game-over.
       if ((phaseRef.current === 'menu' || phaseRef.current === 'over') &&
           (e.code === 'Space' || e.code === 'Enter')) {
         stateRef.current = makeInitialState();
         setPhase('playing');
       }
-      // Prevent page scroll on movement keys.
       if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) {
         e.preventDefault();
       }
@@ -117,7 +117,7 @@ export default function PongBeachVolleyball() {
     };
   }, []);
 
-  // Canvas setup + animation loop — stable, no phase dep.
+  // Canvas + RAF loop — stable, no phase dep.
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -125,7 +125,6 @@ export default function PongBeachVolleyball() {
     canvas.height = LOGICAL_H * SCALE;
     const ctx = canvas.getContext('2d');
     ctx.imageSmoothingEnabled = false;
-    // Use setTransform (not scale) so hot-reloads don't compound.
     ctx.setTransform(SCALE, 0, 0, SCALE, 0, 0);
 
     let raf = 0;
@@ -153,8 +152,8 @@ export default function PongBeachVolleyball() {
     <div className="flex flex-col items-center gap-3">
       <h2 className="font-pixel text-gb-lightest text-sm">PONG: BEACH VOLLEYBALL</h2>
       <p className="text-[10px] text-gb-light text-center max-w-md">
-        P1: WASD &nbsp;·&nbsp; P2: ARROWS &nbsp;·&nbsp; 3 hits per side — bump, set, SPIKE.
-        The ball always arcs to your partner, so you must alternate.
+        P1: WASD &nbsp;·&nbsp; P2: ARROWS &nbsp;·&nbsp; BUMP · SET · ROCKET.
+        Don't whiff your partner's pass — the ball drifts back and scores on you.
       </p>
       <canvas
         ref={canvasRef}
@@ -168,66 +167,51 @@ export default function PongBeachVolleyball() {
 // ---- update -----------------------------------------------------------------
 
 function update(s, dt, keys) {
-  // Serve delay between rallies: freeze everything briefly.
+  // Pre-serve freeze.
   if (s.serveTimer > 0) {
     s.serveTimer -= dt;
     return;
   }
 
-  // --- P1 input (WASD) ---
-  movePlayer(s.p1, keys['KeyW'], keys['KeyS'], keys['KeyA'], keys['KeyD'], dt);
+  // --- Player input ---
+  movePlayer(s.p1, keys['KeyW'], keys['KeyS'], keys['KeyA'], keys['KeyD'], dt, 'team');
+  movePlayer(s.p2, keys['ArrowUp'], keys['ArrowDown'], keys['ArrowLeft'], keys['ArrowRight'], dt, 'team');
 
-  // --- P2 input (Arrow keys) ---
-  movePlayer(s.p2, keys['ArrowUp'], keys['ArrowDown'], keys['ArrowLeft'], keys['ArrowRight'], dt);
+  // --- AI movement (volleyball-aware) ---
+  updateAI(s, dt);
 
-  // --- AI movement ---
-  let target;
-  if (s.ball.x > NET_X) {
-    target = s.ball.x; // track the ball when it's on AI's side
-  } else {
-    target = LOGICAL_W - 60; // rest near the back of the AI court
+  // --- Ball movement + court gravity ---
+  // Court gravity only applies during a side's active bump/set phase.
+  if (!s.ball.rocket && s.hits > 0 && s.hits < 3) {
+    if (s.lastSide === 'team') s.ball.vx -= COURT_GRAVITY * dt; // pull left (toward team back wall)
+    else if (s.lastSide === 'ai') s.ball.vx += COURT_GRAVITY * dt; // pull right (toward AI back wall)
   }
-  const aiDx = target - s.ai.x;
-  const step = AI_SPEED * dt * (s.ball.x > NET_X ? 1 : 0.5);
-  if (aiDx > 2) s.ai.x += Math.min(step, aiDx);
-  else if (aiDx < -2) s.ai.x -= Math.min(step, -aiDx);
-  if (s.ai.x < NET_X + PLAYER_RADIUS + 2) s.ai.x = NET_X + PLAYER_RADIUS + 2;
-  if (s.ai.x > LOGICAL_W - PLAYER_RADIUS) s.ai.x = LOGICAL_W - PLAYER_RADIUS;
-
-  // --- Ball physics ---
-  s.ball.vy += GRAVITY * dt;
   s.ball.x += s.ball.vx * dt;
   s.ball.y += s.ball.vy * dt;
 
-  // Wall bounces (left, right, top)
-  if (s.ball.x < BALL_RADIUS) { s.ball.x = BALL_RADIUS; s.ball.vx = Math.abs(s.ball.vx) * 0.8; }
-  if (s.ball.x > LOGICAL_W - BALL_RADIUS) { s.ball.x = LOGICAL_W - BALL_RADIUS; s.ball.vx = -Math.abs(s.ball.vx) * 0.8; }
-  if (s.ball.y < BALL_RADIUS) { s.ball.y = BALL_RADIUS; s.ball.vy = Math.abs(s.ball.vy) * 0.5; }
-
-  // Net collision (a thin vertical strip from NET_TOP to the floor)
-  if (s.ball.y > NET_TOP && Math.abs(s.ball.x - NET_X) < BALL_RADIUS + 2) {
-    if (s.ball.vx > 0 && s.ball.x < NET_X) {
-      s.ball.x = NET_X - BALL_RADIUS - 2;
-      s.ball.vx = -Math.abs(s.ball.vx) * 0.6;
-    } else if (s.ball.vx < 0 && s.ball.x > NET_X) {
-      s.ball.x = NET_X + BALL_RADIUS + 2;
-      s.ball.vx = Math.abs(s.ball.vx) * 0.6;
-    }
+  // Top/bottom wall bounces — left/right are open score zones.
+  if (s.ball.y < COURT_TOP + BALL_RADIUS) {
+    s.ball.y = COURT_TOP + BALL_RADIUS;
+    s.ball.vy = Math.abs(s.ball.vy);
+  }
+  if (s.ball.y > COURT_BOTTOM - BALL_RADIUS) {
+    s.ball.y = COURT_BOTTOM - BALL_RADIUS;
+    s.ball.vy = -Math.abs(s.ball.vy);
   }
 
-  // Side tracking — reset hit counter whenever the ball crosses the net.
-  const currentSide = s.ball.x < NET_X ? 'team' : 'ai';
+  // Side tracking — reset hit counter whenever the ball crosses the midline.
+  const currentSide = s.ball.x < MID_X ? 'team' : 'ai';
   if (currentSide !== s.lastSide) {
-    s.teamHits = 0;
+    s.hits = 0;
     s.lastToucher = null;
     s.lastSide = currentSide;
+    s.ball.rocket = false;
   }
 
-  // Touch cooldown so a single frame doesn't re-trigger contact.
   if (s.touchCooldown > 0) s.touchCooldown -= dt;
 
-  // --- Team contact (enforces alternation: you cannot hit twice in a row) ---
-  if (currentSide === 'team' && s.touchCooldown <= 0) {
+  // --- Team contact ---
+  if (currentSide === 'team' && s.touchCooldown <= 0 && s.hits < 3) {
     if (circleHit(s.ball, s.p1) && s.lastToucher !== 'p1') {
       handleTeamHit(s, 'p1');
     } else if (circleHit(s.ball, s.p2) && s.lastToucher !== 'p2') {
@@ -235,127 +219,235 @@ function update(s, dt, keys) {
     }
   }
 
-  // --- AI contact: return with an arc toward a random spot on team side ---
-  if (currentSide === 'ai' && s.touchCooldown <= 0 && circleHit(s.ball, s.ai)) {
-    const tx = 40 + Math.random() * (NET_X - 80);
-    const ty = FLOOR_Y - 40;
-    arcBallTo(s.ball, tx, ty, 0.8);
-    s.touchCooldown = 0.25;
-    s.teamHits = 0;
-    s.lastToucher = 'ai';
+  // --- AI contact ---
+  if (currentSide === 'ai' && s.touchCooldown <= 0 && s.hits < 3) {
+    if (circleHit(s.ball, s.ai1) && s.lastToucher !== 'ai1') {
+      handleAIHit(s, 'ai1');
+    } else if (circleHit(s.ball, s.ai2) && s.lastToucher !== 'ai2') {
+      handleAIHit(s, 'ai2');
+    }
   }
 
-  // --- Ball hits the ground = point scored ---
-  if (s.ball.y >= FLOOR_Y - BALL_RADIUS && s.ball.vy > 0) {
-    if (s.ball.x < NET_X) {
-      s.score.ai += 1;
-    } else {
-      s.score.team += 1;
-    }
-    startServe(s);
+  // --- Pong scoring: ball past either edge ---
+  if (s.ball.x < -BALL_RADIUS - 4) {
+    s.score.ai += 1;
+    startServe(s, 'team');
+  } else if (s.ball.x > LOGICAL_W + BALL_RADIUS + 4) {
+    s.score.team += 1;
+    startServe(s, 'ai');
   }
 }
 
-function movePlayer(p, up, down, left, right, dt) {
+function movePlayer(p, up, down, left, right, dt, side) {
   let vx = 0, vy = 0;
   if (up) vy -= PLAYER_SPEED;
   if (down) vy += PLAYER_SPEED;
   if (left) vx -= PLAYER_SPEED;
   if (right) vx += PLAYER_SPEED;
-  // Normalize diagonals so diagonal movement isn't faster.
   if (vx !== 0 && vy !== 0) { vx *= 0.707; vy *= 0.707; }
   p.x += vx * dt;
   p.y += vy * dt;
-  if (p.x < PLAYER_RADIUS) p.x = PLAYER_RADIUS;
-  if (p.x > NET_X - PLAYER_RADIUS - 2) p.x = NET_X - PLAYER_RADIUS - 2;
-  if (p.y < 40) p.y = 40;
-  if (p.y > FLOOR_Y - PLAYER_RADIUS) p.y = FLOOR_Y - PLAYER_RADIUS;
+  clampToSide(p, side);
 }
 
-function handleTeamHit(s, who) {
-  s.teamHits += 1;
-  s.lastToucher = who;
-  s.touchCooldown = 0.25;
-
-  if (s.teamHits >= 3) {
-    // Third hit — auto-spike across the net.
-    spike(s.ball);
+function clampToSide(p, side) {
+  if (side === 'team') {
+    if (p.x < PLAYER_RADIUS) p.x = PLAYER_RADIUS;
+    if (p.x > MID_X - PLAYER_RADIUS - 2) p.x = MID_X - PLAYER_RADIUS - 2;
   } else {
-    // Hits 1 and 2 — arc toward the OTHER teammate.
+    if (p.x < MID_X + PLAYER_RADIUS + 2) p.x = MID_X + PLAYER_RADIUS + 2;
+    if (p.x > LOGICAL_W - PLAYER_RADIUS) p.x = LOGICAL_W - PLAYER_RADIUS;
+  }
+  if (p.y < COURT_TOP + PLAYER_RADIUS) p.y = COURT_TOP + PLAYER_RADIUS;
+  if (p.y > COURT_BOTTOM - PLAYER_RADIUS) p.y = COURT_BOTTOM - PLAYER_RADIUS;
+}
+
+// ---- AI movement ------------------------------------------------------------
+// The AI plays volleyball. When the ball is on the team side, both AIs rest
+// in defensive positions ready to receive a rocket. When the ball is on the
+// AI side, the AI that's eligible to hit (not the lastToucher) moves to the
+// ball; the other AI anticipates where the arcing bump/set will land and
+// moves there to receive the next touch.
+function updateAI(s, dt) {
+  const { ai1, ai2, ball } = s;
+  const midY = (COURT_TOP + COURT_BOTTOM) / 2;
+  const restX = LOGICAL_W - 55;
+
+  if (ball.x < MID_X) {
+    // Defensive: wait for the incoming rocket.
+    const topRestY = (COURT_TOP + midY) / 2;
+    const botRestY = (midY + COURT_BOTTOM) / 2;
+    moveAITo(ai1, restX, topRestY, dt);
+    moveAITo(ai2, restX, botRestY, dt);
+    return;
+  }
+
+  // Offensive / receive: ball is on the AI side.
+  // Figure out who is the "striker" (should go to the ball) and who is the
+  // "support" (should anticipate the next pass's landing).
+  let strikerId, supportId;
+  if (s.lastToucher === 'ai1') {
+    strikerId = 'ai2'; supportId = 'ai1';
+  } else if (s.lastToucher === 'ai2') {
+    strikerId = 'ai1'; supportId = 'ai2';
+  } else {
+    // Fresh rally — whoever is closer takes the ball.
+    const d1 = Math.hypot(ai1.x - ball.x, ai1.y - ball.y);
+    const d2 = Math.hypot(ai2.x - ball.x, ai2.y - ball.y);
+    if (d1 <= d2) { strikerId = 'ai1'; supportId = 'ai2'; }
+    else          { strikerId = 'ai2'; supportId = 'ai1'; }
+  }
+
+  const striker = s[strikerId];
+  const support = s[supportId];
+
+  // Striker: go to the ball, stepping slightly behind it in X so the contact
+  // happens at the ball's center (not behind it).
+  const strikerTargetX = Math.min(LOGICAL_W - PLAYER_RADIUS - 4, ball.x + 4);
+  const strikerTargetY = ball.y;
+  moveAITo(striker, strikerTargetX, strikerTargetY, dt);
+
+  // Support: anticipate where the arcing bump/set will end up.
+  // If hits are 0, we're about to receive a rocket or serve — support hangs
+  // back opposite the striker vertically so both zones are covered.
+  // If hits are 1 or 2, the striker will bump toward the support's current
+  // position; support should move to mirror the striker vertically on the
+  // OTHER side of midY so the arc lands between them.
+  let supportTargetX = Math.min(LOGICAL_W - 30, Math.max(MID_X + 40, ball.x - 30));
+  let supportTargetY;
+  if (s.hits === 0) {
+    // Guard the opposite vertical half.
+    supportTargetY = ball.y < midY ? midY + 30 : midY - 30;
+  } else {
+    // Volleyball support: move to the mirror position across midY so the
+    // incoming bump arc (which pulls right under gravity) drops near us.
+    supportTargetY = ball.y < midY ? midY + 20 : midY - 20;
+    // Pull the support a little back so the rightward gravity drift reaches them.
+    supportTargetX = Math.min(LOGICAL_W - 30, Math.max(MID_X + 40, ball.x + 28));
+  }
+  moveAITo(support, supportTargetX, supportTargetY, dt);
+}
+
+function moveAITo(p, tx, ty, dt) {
+  const dx = tx - p.x;
+  const dy = ty - p.y;
+  const d = Math.sqrt(dx * dx + dy * dy);
+  if (d > 0.5) {
+    const step = Math.min(AI_SPEED * dt, d);
+    p.x += (dx / d) * step;
+    p.y += (dy / d) * step;
+  }
+  clampToSide(p, 'ai');
+}
+
+// ---- hit handlers -----------------------------------------------------------
+
+function handleTeamHit(s, who) {
+  s.hits += 1;
+  s.lastToucher = who;
+  s.touchCooldown = 0.22;
+
+  if (s.hits >= 3) {
+    // Rocket punch: aim at the midpoint between the AI defenders.
+    const gapY = (s.ai1.y + s.ai2.y) / 2 + (Math.random() - 0.5) * 40;
+    const clampedY = Math.max(COURT_TOP + 8, Math.min(COURT_BOTTOM - 8, gapY));
+    sendBallTo(s.ball, LOGICAL_W + 60, clampedY, ROCKET_SPEED);
+    s.ball.rocket = true;
+  } else {
+    // Bump/set: arc toward the other teammate. The leftward court gravity
+    // will curve the ball during flight, giving it the volleyball feel.
     const other = who === 'p1' ? s.p2 : s.p1;
-    arcBallTo(s.ball, other.x, other.y - 8, 0.65);
+    sendBallTo(s.ball, other.x, other.y, BOUNCE_PASS_SPEED);
+    s.ball.rocket = false;
   }
 }
 
-function startServe(s) {
-  s.teamHits = 0;
+function handleAIHit(s, who) {
+  s.hits += 1;
+  s.lastToucher = who;
+  s.touchCooldown = 0.22;
+
+  if (s.hits >= 3) {
+    // AI rocket punch: aim at the midpoint between the two team players.
+    const gapY = (s.p1.y + s.p2.y) / 2 + (Math.random() - 0.5) * 40;
+    const clampedY = Math.max(COURT_TOP + 8, Math.min(COURT_BOTTOM - 8, gapY));
+    sendBallTo(s.ball, -60, clampedY, ROCKET_SPEED);
+    s.ball.rocket = true;
+  } else {
+    const other = who === 'ai1' ? s.ai2 : s.ai1;
+    sendBallTo(s.ball, other.x, other.y, BOUNCE_PASS_SPEED);
+    s.ball.rocket = false;
+  }
+}
+
+function startServe(s, to) {
+  const midY = (COURT_TOP + COURT_BOTTOM) / 2;
+  s.hits = 0;
   s.lastToucher = null;
   s.serveTimer = 0.8;
-  // Ball comes from the AI side, arcing toward the team court.
-  s.ball.x = LOGICAL_W - 50;
-  s.ball.y = 70;
-  s.ball.vx = -130;
-  s.ball.vy = 20;
-  s.lastSide = 'ai';
+  s.ball.x = MID_X + (to === 'team' ? 2 : -2);
+  s.ball.y = midY + (Math.random() - 0.5) * 80;
+  s.ball.rocket = false;
+  s.ball.vx = to === 'team' ? -210 : 210;
+  s.ball.vy = (Math.random() - 0.5) * 140;
+  s.lastSide = to === 'team' ? 'ai' : 'team';
   s.touchCooldown = 0;
 }
 
 // ---- draw -------------------------------------------------------------------
 
 function draw(ctx, s, phase) {
-  // Sky
-  ctx.fillStyle = C.dark;
+  // Sand court background
+  ctx.fillStyle = C.light;
   ctx.fillRect(0, 0, LOGICAL_W, LOGICAL_H);
 
-  // Sun
-  ctx.fillStyle = C.light;
-  ctx.beginPath();
-  ctx.arc(NET_X, 40, 16, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.strokeStyle = C.lightest;
-  ctx.lineWidth = 1;
-  ctx.stroke();
-
-  // Distant horizon line
-  ctx.fillStyle = C.darkest;
-  ctx.fillRect(0, 120, LOGICAL_W, 1);
-
-  // Palm tree silhouettes on each side
-  drawPalm(ctx, 18, 170);
-  drawPalm(ctx, LOGICAL_W - 18, 170);
-
-  // Sand
-  ctx.fillStyle = C.light;
-  ctx.fillRect(0, FLOOR_Y, LOGICAL_W, LOGICAL_H - FLOOR_Y);
-  // Sand texture dots (deterministic so it doesn't shimmer)
+  // Deterministic sand texture
   ctx.fillStyle = C.lightest;
-  for (let i = 0; i < 50; i++) {
+  for (let i = 0; i < 120; i++) {
     const x = (i * 37) % LOGICAL_W;
-    const y = FLOOR_Y + 2 + ((i * 13) % (LOGICAL_H - FLOOR_Y - 4));
+    const y = (i * 53 + 7) % LOGICAL_H;
     ctx.fillRect(x, y, 1, 1);
   }
-  // Court baseline
-  ctx.fillStyle = C.lightest;
-  ctx.fillRect(4, FLOOR_Y - 1, LOGICAL_W - 8, 1);
 
-  // Net
+  // HUD strip at top
   ctx.fillStyle = C.darkest;
-  ctx.fillRect(NET_X - 1, NET_TOP - 6, 2, NET_BOTTOM - NET_TOP + 6);
+  ctx.fillRect(0, 0, LOGICAL_W, COURT_TOP - 4);
+
+  // Court outline
   ctx.strokeStyle = C.darkest;
   ctx.lineWidth = 1;
-  for (let y = NET_TOP; y < NET_BOTTOM; y += 4) {
-    ctx.beginPath();
-    ctx.moveTo(NET_X - 3, y);
-    ctx.lineTo(NET_X + 3, y);
-    ctx.stroke();
+  ctx.strokeRect(2, COURT_TOP, LOGICAL_W - 4, COURT_BOTTOM - COURT_TOP);
+
+  // Center "line" (not a net — ball always crosses)
+  ctx.fillStyle = C.dark;
+  for (let y = COURT_TOP + 4; y < COURT_BOTTOM - 2; y += 8) {
+    ctx.fillRect(MID_X - 1, y, 2, 4);
   }
-  ctx.fillStyle = C.lightest;
-  ctx.fillRect(NET_X - 3, NET_TOP - 7, 6, 2);
+
+  // Goal markers at the extreme left/right edges so players can see where
+  // "past the opponent" actually is.
+  ctx.fillStyle = C.darkest;
+  ctx.fillRect(0, COURT_TOP, 2, COURT_BOTTOM - COURT_TOP);
+  ctx.fillRect(LOGICAL_W - 2, COURT_TOP, 2, COURT_BOTTOM - COURT_TOP);
 
   // Players
   drawTeamPlayer(ctx, s.p1, '1');
   drawTeamPlayer(ctx, s.p2, '2');
-  drawAI(ctx, s.ai);
+  drawAIPlayer(ctx, s.ai1);
+  drawAIPlayer(ctx, s.ai2);
+
+  // Ball trail when in rocket mode
+  if (s.ball.rocket) {
+    const mag = Math.sqrt(s.ball.vx * s.ball.vx + s.ball.vy * s.ball.vy) || 1;
+    const nx = s.ball.vx / mag;
+    const ny = s.ball.vy / mag;
+    ctx.strokeStyle = C.darkest;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(s.ball.x, s.ball.y);
+    ctx.lineTo(s.ball.x - nx * 12, s.ball.y - ny * 12);
+    ctx.stroke();
+  }
 
   // Ball
   ctx.fillStyle = C.lightest;
@@ -365,19 +457,19 @@ function draw(ctx, s, phase) {
   ctx.strokeStyle = C.darkest;
   ctx.lineWidth = 1;
   ctx.stroke();
-  // Ball seam
   ctx.beginPath();
   ctx.moveTo(s.ball.x - BALL_RADIUS, s.ball.y);
   ctx.lineTo(s.ball.x + BALL_RADIUS, s.ball.y);
   ctx.stroke();
 
-  // Hit counter floating above the ball when team is mid-rally
-  if (s.teamHits > 0 && s.lastSide === 'team') {
-    ctx.fillStyle = C.lightest;
+  // Hit counter label floating near the ball during either side's rally
+  if (s.hits > 0 && s.hits < 3) {
+    ctx.fillStyle = C.darkest;
     ctx.font = 'bold 8px monospace';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'alphabetic';
-    ctx.fillText(String(s.teamHits), s.ball.x, s.ball.y - BALL_RADIUS - 3);
+    const label = s.hits === 2 ? 'SET' : 'PASS';
+    ctx.fillText(label, s.ball.x, s.ball.y - BALL_RADIUS - 3);
   }
 
   // Score HUD
@@ -389,7 +481,7 @@ function draw(ctx, s, phase) {
   ctx.textAlign = 'right';
   ctx.fillText(`AI ${s.score.ai}`, LOGICAL_W - 8, 6);
   ctx.textAlign = 'center';
-  ctx.fillText(`FIRST TO ${WIN_SCORE}`, NET_X, 6);
+  ctx.fillText(`FIRST TO ${WIN_SCORE}`, MID_X, 6);
 
   // Phase overlays
   if (phase === 'menu') {
@@ -407,14 +499,13 @@ function drawCenterBanner(ctx, title, sub) {
   ctx.font = 'bold 12px monospace';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.fillText(title, NET_X, LOGICAL_H / 2 - 5);
+  ctx.fillText(title, MID_X, LOGICAL_H / 2 - 5);
   ctx.fillStyle = C.light;
   ctx.font = 'bold 8px monospace';
-  ctx.fillText(sub, NET_X, LOGICAL_H / 2 + 10);
+  ctx.fillText(sub, MID_X, LOGICAL_H / 2 + 10);
 }
 
 function drawTeamPlayer(ctx, p, label) {
-  // Filled circle with dark outline + number badge
   ctx.fillStyle = C.lightest;
   ctx.beginPath();
   ctx.arc(p.x, p.y, PLAYER_RADIUS, 0, Math.PI * 2);
@@ -427,32 +518,21 @@ function drawTeamPlayer(ctx, p, label) {
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.fillText(label, p.x, p.y + 1);
-  // Shadow on the sand
-  ctx.fillStyle = C.dark;
-  ctx.fillRect(p.x - PLAYER_RADIUS, FLOOR_Y, PLAYER_RADIUS * 2, 1);
 }
 
-function drawAI(ctx, a) {
-  // Rectangular silhouette to visually contrast with the round team players.
-  const w = PLAYER_RADIUS * 1.6;
-  const h = PLAYER_RADIUS * 2.6;
+function drawAIPlayer(ctx, a) {
   ctx.fillStyle = C.darkest;
-  ctx.fillRect(a.x - w / 2, a.y - h / 2, w, h);
+  ctx.beginPath();
+  ctx.arc(a.x, a.y, PLAYER_RADIUS, 0, Math.PI * 2);
+  ctx.fill();
   ctx.strokeStyle = C.lightest;
   ctx.lineWidth = 1;
-  ctx.strokeRect(a.x - w / 2, a.y - h / 2, w, h);
-  ctx.fillStyle = C.light;
-  ctx.fillRect(a.x - 2, a.y - h / 2 + 2, 4, 2); // eye-slit
-}
-
-function drawPalm(ctx, x, baseY) {
-  // Trunk
-  ctx.fillStyle = C.darkest;
-  ctx.fillRect(x - 1, baseY, 2, 50);
-  // Fronds
-  ctx.fillRect(x - 7, baseY - 2, 14, 2);
-  ctx.fillRect(x - 5, baseY - 4, 10, 2);
-  ctx.fillRect(x - 3, baseY - 6, 6, 2);
-  ctx.fillRect(x - 10, baseY, 4, 2);
-  ctx.fillRect(x + 6, baseY, 4, 2);
+  ctx.stroke();
+  // X mark
+  ctx.beginPath();
+  ctx.moveTo(a.x - 4, a.y - 4);
+  ctx.lineTo(a.x + 4, a.y + 4);
+  ctx.moveTo(a.x + 4, a.y - 4);
+  ctx.lineTo(a.x - 4, a.y + 4);
+  ctx.stroke();
 }
