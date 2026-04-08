@@ -7,9 +7,16 @@
 //
 // Requires ANTHROPIC_API_KEY in .env at the repo root.
 
-import 'dotenv/config';
+import { config as loadEnv } from 'dotenv';
+import { fileURLToPath } from 'url';
+import { dirname, resolve } from 'path';
 import Anthropic from '@anthropic-ai/sdk';
 import { loadAll, addGame, getSchema } from '../lib/games-db.js';
+
+// Load .env from the repo root (two levels up: pipeline/brainstorm/brainstorm.js → repo root)
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+loadEnv({ path: resolve(__dirname, '../../.env'), override: true });
 
 const args = process.argv.slice(2);
 const countIdx = args.indexOf('--count');

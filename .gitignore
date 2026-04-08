@@ -6,6 +6,7 @@ dist/
 .vite/
 site/dist/
 partykit/dist/
+.wrangler/
 
 # env / secrets
 .env
