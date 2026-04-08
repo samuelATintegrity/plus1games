@@ -32,7 +32,7 @@ const MID_X = LOGICAL_W / 2;
 const PLAYER_RADIUS = 10;
 const BALL_RADIUS = 5;
 const PLAYER_SPEED = 170;   // px/s
-const AI_SPEED = 150;       // px/s
+const AI_SPEED = 165;       // px/s
 
 // Bump/set arcs are computed as 2D projectiles with lateral "court gravity"
 // pulling the ball toward the rallying side's back wall. Tuned so the ball
@@ -93,6 +93,25 @@ function circleHit(ball, p) {
   const dy = ball.y - p.y;
   const r = BALL_RADIUS + PLAYER_RADIUS;
   return dx * dx + dy * dy <= r * r;
+}
+
+// Predict what Y the ball will have when it reaches targetX, accounting
+// for top/bottom wall bounces along the way. Used by the AI to place
+// itself on the intercept line BEFORE a fast rocket arrives. Returns the
+// current y if the ball isn't moving toward targetX (t < 0 or vx == 0).
+function predictBallY(ball, targetX) {
+  if (ball.vx === 0) return ball.y;
+  const t = (targetX - ball.x) / ball.vx;
+  if (t < 0) return ball.y;
+  const yRaw = ball.y + ball.vy * t;
+  const hMin = COURT_TOP + BALL_RADIUS;
+  const hMax = COURT_BOTTOM - BALL_RADIUS;
+  const span = hMax - hMin;
+  if (span <= 0) return ball.y;
+  // Fold yRaw back into [hMin, hMax] using triangle-wave reflection.
+  let rel = ((yRaw - hMin) % (2 * span) + 2 * span) % (2 * span);
+  if (rel > span) rel = 2 * span - rel;
+  return hMin + rel;
 }
 
 // ---- initial state ----------------------------------------------------------
@@ -300,41 +319,55 @@ function clampToSide(p, side) {
 }
 
 // ---- AI movement ------------------------------------------------------------
-// The AI plays volleyball:
-//   • Ball on team side → both AIs rest in defensive positions, ready to
-//     receive the team's rocket.
-//   • Ball on AI side, hits === 0 → the closer AI intercepts; the other
-//     covers the opposite vertical half.
-//   • Ball on AI side, mid-rally (hits 1 or 2) → BOTH AIs hold position.
+// The AI plays volleyball AND defends Pong-style:
+//   • Ball on team side, team mid-rally (hits 1 or 2) → shift toward the
+//     intercept line and tighten around the middle, anticipating a rocket.
+//   • Ball on AI side, incoming rocket/serve → predict where the ball will
+//     cross the AI's intercept line (with wall bounces) and send the closer
+//     AI to that exact spot; support covers the opposite half.
+//   • Ball on AI side, mid-rally (hits 1 or 2) → both AIs hold position.
 //     The arc was launched aimed at the receiver's exact current position,
 //     so holding is the correct strategy — moving would cause a miss.
+//
+// The intercept X sits well forward of the back wall so the AI has room
+// to step onto a rocket instead of just reacting at its rest line.
+const AI_INTERCEPT_X = LOGICAL_W - 60;
+
 function updateAI(s, dt) {
   const { ai1, ai2, ball } = s;
   const midY = (COURT_TOP + COURT_BOTTOM) / 2;
-  const restX = LOGICAL_W - 55;
 
   if (ball.x < MID_X) {
-    // Ball on team side — defensive rest.
-    const topRestY = (COURT_TOP + midY) / 2;
-    const botRestY = (midY + COURT_BOTTOM) / 2;
-    moveAITo(ai1, restX, topRestY, dt);
-    moveAITo(ai2, restX, botRestY, dt);
+    // Ball on team side. If the team is mid-rally, start pre-positioning
+    // toward the likely rocket lane — predict where the current ball will
+    // cross AI_INTERCEPT_X and weight the rest Y toward that prediction.
+    let anchorY = midY;
+    if (!s.ball.rocket && s.hits > 0 && s.hits < 3) {
+      // The ball is arcing; its vx can be small or wrong-signed, so fall
+      // back to midY if prediction isn't meaningful.
+      if (ball.vx > 10) anchorY = predictBallY(ball, AI_INTERCEPT_X);
+    }
+    const topRestY = Math.max(COURT_TOP + PLAYER_RADIUS + 4, anchorY - 34);
+    const botRestY = Math.min(COURT_BOTTOM - PLAYER_RADIUS - 4, anchorY + 34);
+    moveAITo(ai1, AI_INTERCEPT_X, topRestY, dt);
+    moveAITo(ai2, AI_INTERCEPT_X, botRestY, dt);
     return;
   }
 
   // Ball on AI side.
   if (s.hits === 0 || s.ball.rocket) {
-    // Incoming ball (team rocket, serve, or fresh). Closer AI intercepts;
-    // the other covers the opposite vertical half.
-    const d1 = Math.hypot(ai1.x - ball.x, ai1.y - ball.y);
-    const d2 = Math.hypot(ai2.x - ball.x, ai2.y - ball.y);
+    // Incoming rocket or fresh ball. Predict the intercept Y including
+    // wall bounces. The AI that's vertically closer to that prediction
+    // handles it; the other drops to cover the opposite half.
+    const predictedY = predictBallY(ball, AI_INTERCEPT_X);
+    const d1 = Math.abs(ai1.y - predictedY);
+    const d2 = Math.abs(ai2.y - predictedY);
     const [striker, support] = d1 <= d2 ? [ai1, ai2] : [ai2, ai1];
 
-    const strikerTargetX = Math.min(LOGICAL_W - PLAYER_RADIUS - 4, ball.x + 4);
-    moveAITo(striker, strikerTargetX, ball.y, dt);
+    moveAITo(striker, AI_INTERCEPT_X, predictedY, dt);
 
-    const supportY = ball.y < midY ? midY + 30 : midY - 30;
-    moveAITo(support, restX, supportY, dt);
+    const supportY = predictedY < midY ? midY + 40 : midY - 40;
+    moveAITo(support, AI_INTERCEPT_X - 12, supportY, dt);
     return;
   }
 
