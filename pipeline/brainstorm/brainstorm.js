@@ -57,7 +57,7 @@ const userPrompt = `Generate ${COUNT} new game ideas as a JSON array.`;
 console.log(`Asking Claude for ${COUNT} ideas...`);
 
 const response = await client.messages.create({
-  model: 'claude-opus-4-5',
+  model: 'claude-opus-4-6',
   max_tokens: 4096,
   system: systemPrompt,
   messages: [{ role: 'user', content: userPrompt }],

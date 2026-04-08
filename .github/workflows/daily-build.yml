@@ -13,6 +13,7 @@ jobs:
       contents: write
       pull-requests: write
       issues: write
+      id-token: write
 
     steps:
       - name: Checkout
@@ -48,7 +49,9 @@ jobs:
         uses: anthropics/claude-code-action@v1
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
-          prompt_file: pipeline/build/build-prompt.md
+          prompt: |
+            Read the file `pipeline/build/build-prompt.md` and follow its instructions exactly. The `GAME_ID` environment variable is set to the id of the game you should build.
+          claude_args: "--model claude-sonnet-4-6 --allowed-tools Read,Write,Edit,Glob,Grep,Bash"
         env:
           GAME_ID: ${{ steps.pick.outputs.game_id }}
 
