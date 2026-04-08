@@ -32,11 +32,15 @@ const MID_X = LOGICAL_W / 2;
 const PLAYER_RADIUS = 10;
 const BALL_RADIUS = 5;
 const PLAYER_SPEED = 170;   // px/s
-const AI_SPEED = 135;       // px/s — slightly slower so the AI can whiff
+const AI_SPEED = 150;       // px/s
 
-const BOUNCE_PASS_SPEED = 180;
+// Bump/set arcs are computed as 2D projectiles with lateral "court gravity"
+// pulling the ball toward the rallying side's back wall. Tuned so the ball
+// visibly arcs forward about 50 pixels before curving back to the partner.
+const BOUNCE_ARC_TIME = 0.9; // seconds of flight from hitter to receiver
+const COURT_GRAVITY = 500;   // px/s² lateral pull during bumps and sets
+
 const ROCKET_SPEED = 380;
-const COURT_GRAVITY = 130;  // px/s² lateral pull toward the rallying side's back wall
 
 const WIN_SCORE = 7;
 
@@ -56,6 +60,22 @@ function sendBallTo(ball, tx, ty, speed) {
   const d = Math.sqrt(dx * dx + dy * dy) || 1;
   ball.vx = (dx / d) * speed;
   ball.vy = (dy / d) * speed;
+}
+
+// Projectile launch. Given a target (tx, ty), a lateral acceleration `ax`
+// (signed px/s² — negative = leftward for team, positive = rightward for AI),
+// and a flight time T, compute the initial velocity such that the ball
+// passes through (tx, ty) exactly at time T under that constant acceleration.
+// Because `ax` pulls the ball backward, vx0 ends up pointing *forward* (away
+// from the shooter's back wall), producing a visible volleyball-style arc.
+//
+//   x(T) = x0 + vx0*T + 0.5*ax*T²  ⇒  vx0 = (dx - 0.5*ax*T²) / T
+//   y(T) = y0 + vy0*T              ⇒  vy0 = dy / T
+function launchArcTo(ball, tx, ty, ax, T) {
+  const dx = tx - ball.x;
+  const dy = ty - ball.y;
+  ball.vx = (dx - 0.5 * ax * T * T) / T;
+  ball.vy = dy / T;
 }
 
 function circleHit(ball, p) {
@@ -181,10 +201,15 @@ function update(s, dt, keys) {
   updateAI(s, dt);
 
   // --- Ball movement + court gravity ---
-  // Court gravity only applies during a side's active bump/set phase.
+  // Court gravity only applies during an active bump/set phase (not during
+  // serves, rockets, or between rallies). The direction is determined by
+  // who made the last touch, not by which side the ball is currently on —
+  // this keeps the arc consistent even if it briefly strays across the
+  // midline during flight.
   if (!s.ball.rocket && s.hits > 0 && s.hits < 3) {
-    if (s.lastSide === 'team') s.ball.vx -= COURT_GRAVITY * dt; // pull left (toward team back wall)
-    else if (s.lastSide === 'ai') s.ball.vx += COURT_GRAVITY * dt; // pull right (toward AI back wall)
+    const teamRallying = s.lastToucher === 'p1' || s.lastToucher === 'p2';
+    if (teamRallying) s.ball.vx -= COURT_GRAVITY * dt; // pulls left toward team back wall
+    else              s.ball.vx += COURT_GRAVITY * dt; // pulls right toward AI back wall
   }
   s.ball.x += s.ball.vx * dt;
   s.ball.y += s.ball.vy * dt;
@@ -263,18 +288,21 @@ function clampToSide(p, side) {
 }
 
 // ---- AI movement ------------------------------------------------------------
-// The AI plays volleyball. When the ball is on the team side, both AIs rest
-// in defensive positions ready to receive a rocket. When the ball is on the
-// AI side, the AI that's eligible to hit (not the lastToucher) moves to the
-// ball; the other AI anticipates where the arcing bump/set will land and
-// moves there to receive the next touch.
+// The AI plays volleyball:
+//   • Ball on team side → both AIs rest in defensive positions, ready to
+//     receive the team's rocket.
+//   • Ball on AI side, hits === 0 → the closer AI intercepts; the other
+//     covers the opposite vertical half.
+//   • Ball on AI side, mid-rally (hits 1 or 2) → BOTH AIs hold position.
+//     The arc was launched aimed at the receiver's exact current position,
+//     so holding is the correct strategy — moving would cause a miss.
 function updateAI(s, dt) {
   const { ai1, ai2, ball } = s;
   const midY = (COURT_TOP + COURT_BOTTOM) / 2;
   const restX = LOGICAL_W - 55;
 
   if (ball.x < MID_X) {
-    // Defensive: wait for the incoming rocket.
+    // Ball on team side — defensive rest.
     const topRestY = (COURT_TOP + midY) / 2;
     const botRestY = (midY + COURT_BOTTOM) / 2;
     moveAITo(ai1, restX, topRestY, dt);
@@ -282,50 +310,26 @@ function updateAI(s, dt) {
     return;
   }
 
-  // Offensive / receive: ball is on the AI side.
-  // Figure out who is the "striker" (should go to the ball) and who is the
-  // "support" (should anticipate the next pass's landing).
-  let strikerId, supportId;
-  if (s.lastToucher === 'ai1') {
-    strikerId = 'ai2'; supportId = 'ai1';
-  } else if (s.lastToucher === 'ai2') {
-    strikerId = 'ai1'; supportId = 'ai2';
-  } else {
-    // Fresh rally — whoever is closer takes the ball.
+  // Ball on AI side.
+  if (s.hits === 0 || s.ball.rocket) {
+    // Incoming ball (team rocket, serve, or fresh). Closer AI intercepts;
+    // the other covers the opposite vertical half.
     const d1 = Math.hypot(ai1.x - ball.x, ai1.y - ball.y);
     const d2 = Math.hypot(ai2.x - ball.x, ai2.y - ball.y);
-    if (d1 <= d2) { strikerId = 'ai1'; supportId = 'ai2'; }
-    else          { strikerId = 'ai2'; supportId = 'ai1'; }
+    const [striker, support] = d1 <= d2 ? [ai1, ai2] : [ai2, ai1];
+
+    const strikerTargetX = Math.min(LOGICAL_W - PLAYER_RADIUS - 4, ball.x + 4);
+    moveAITo(striker, strikerTargetX, ball.y, dt);
+
+    const supportY = ball.y < midY ? midY + 30 : midY - 30;
+    moveAITo(support, restX, supportY, dt);
+    return;
   }
 
-  const striker = s[strikerId];
-  const support = s[supportId];
-
-  // Striker: go to the ball, stepping slightly behind it in X so the contact
-  // happens at the ball's center (not behind it).
-  const strikerTargetX = Math.min(LOGICAL_W - PLAYER_RADIUS - 4, ball.x + 4);
-  const strikerTargetY = ball.y;
-  moveAITo(striker, strikerTargetX, strikerTargetY, dt);
-
-  // Support: anticipate where the arcing bump/set will end up.
-  // If hits are 0, we're about to receive a rocket or serve — support hangs
-  // back opposite the striker vertically so both zones are covered.
-  // If hits are 1 or 2, the striker will bump toward the support's current
-  // position; support should move to mirror the striker vertically on the
-  // OTHER side of midY so the arc lands between them.
-  let supportTargetX = Math.min(LOGICAL_W - 30, Math.max(MID_X + 40, ball.x - 30));
-  let supportTargetY;
-  if (s.hits === 0) {
-    // Guard the opposite vertical half.
-    supportTargetY = ball.y < midY ? midY + 30 : midY - 30;
-  } else {
-    // Volleyball support: move to the mirror position across midY so the
-    // incoming bump arc (which pulls right under gravity) drops near us.
-    supportTargetY = ball.y < midY ? midY + 20 : midY - 20;
-    // Pull the support a little back so the rightward gravity drift reaches them.
-    supportTargetX = Math.min(LOGICAL_W - 30, Math.max(MID_X + 40, ball.x + 28));
-  }
-  moveAITo(support, supportTargetX, supportTargetY, dt);
+  // Mid-rally (hits 1 or 2): both AIs hold position. The arc lands at the
+  // receiver's current spot, so any movement would cause a whiff.
+  moveAITo(ai1, ai1.x, ai1.y, dt);
+  moveAITo(ai2, ai2.x, ai2.y, dt);
 }
 
 function moveAITo(p, tx, ty, dt) {
@@ -348,16 +352,19 @@ function handleTeamHit(s, who) {
   s.touchCooldown = 0.22;
 
   if (s.hits >= 3) {
-    // Rocket punch: aim at the midpoint between the AI defenders.
+    // Rocket punch: straight-line shot aimed at the midpoint between the AI
+    // defenders (plus small random offset). No gravity — rocket mode.
     const gapY = (s.ai1.y + s.ai2.y) / 2 + (Math.random() - 0.5) * 40;
     const clampedY = Math.max(COURT_TOP + 8, Math.min(COURT_BOTTOM - 8, gapY));
     sendBallTo(s.ball, LOGICAL_W + 60, clampedY, ROCKET_SPEED);
     s.ball.rocket = true;
   } else {
-    // Bump/set: arc toward the other teammate. The leftward court gravity
-    // will curve the ball during flight, giving it the volleyball feel.
+    // Bump/set: launch as a 2D projectile toward the partner's current
+    // position. Initial velocity points forward (rightward, toward the
+    // midline); court gravity (leftward, -COURT_GRAVITY) drags it back so
+    // the flight visibly arcs out and then curves back to the partner.
     const other = who === 'p1' ? s.p2 : s.p1;
-    sendBallTo(s.ball, other.x, other.y, BOUNCE_PASS_SPEED);
+    launchArcTo(s.ball, other.x, other.y, -COURT_GRAVITY, BOUNCE_ARC_TIME);
     s.ball.rocket = false;
   }
 }
@@ -374,8 +381,10 @@ function handleAIHit(s, who) {
     sendBallTo(s.ball, -60, clampedY, ROCKET_SPEED);
     s.ball.rocket = true;
   } else {
+    // Mirror of the team's bump/set: forward (leftward) launch, rightward
+    // court gravity (+COURT_GRAVITY) drags it back to the other AI.
     const other = who === 'ai1' ? s.ai2 : s.ai1;
-    sendBallTo(s.ball, other.x, other.y, BOUNCE_PASS_SPEED);
+    launchArcTo(s.ball, other.x, other.y, +COURT_GRAVITY, BOUNCE_ARC_TIME);
     s.ball.rocket = false;
   }
 }
