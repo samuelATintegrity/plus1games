@@ -40,7 +40,17 @@ const AI_SPEED = 150;       // px/s
 const BOUNCE_ARC_TIME = 0.9; // seconds of flight from hitter to receiver
 const COURT_GRAVITY = 500;   // px/s² lateral pull during bumps and sets
 
+// How much the hitter's current movement velocity contaminates the launch.
+// 0 = perfect aim regardless of motion; 1 = hitter velocity is added in
+// full. 0.35 means moving at full speed against the intended pass direction
+// shifts the landing spot by ~45 px, forcing the partner to chase instead
+// of parking.
+const VELOCITY_BIAS = 0.35;
+
 const ROCKET_SPEED = 380;
+// Max angle a spike can take. 1.5 = arctan(1.5) ≈ 56° off the horizontal,
+// which is steep enough to bank a rocket off the top or bottom wall.
+const ROCKET_MAX_Y_RATIO = 1.5;
 
 const WIN_SCORE = 7;
 
@@ -90,10 +100,10 @@ function circleHit(ball, p) {
 function makeInitialState() {
   const midY = (COURT_TOP + COURT_BOTTOM) / 2;
   return {
-    p1:  { x: 60,  y: midY - 28 },
-    p2:  { x: 60,  y: midY + 28 },
-    ai1: { x: LOGICAL_W - 60, y: midY - 28 },
-    ai2: { x: LOGICAL_W - 60, y: midY + 28 },
+    p1:  { x: 60,  y: midY - 28, vx: 0, vy: 0 },
+    p2:  { x: 60,  y: midY + 28, vx: 0, vy: 0 },
+    ai1: { x: LOGICAL_W - 60, y: midY - 28, vx: 0, vy: 0 },
+    ai2: { x: LOGICAL_W - 60, y: midY + 28, vx: 0, vy: 0 },
     ball: { x: MID_X, y: midY, vx: -210, vy: 40, rocket: false },
     score: { team: 0, ai: 0 },
     hits: 0,
@@ -270,6 +280,8 @@ function movePlayer(p, up, down, left, right, dt, side) {
   if (left) vx -= PLAYER_SPEED;
   if (right) vx += PLAYER_SPEED;
   if (vx !== 0 && vy !== 0) { vx *= 0.707; vy *= 0.707; }
+  p.vx = vx;
+  p.vy = vy;
   p.x += vx * dt;
   p.y += vy * dt;
   clampToSide(p, side);
@@ -338,33 +350,57 @@ function moveAITo(p, tx, ty, dt) {
   const d = Math.sqrt(dx * dx + dy * dy);
   if (d > 0.5) {
     const step = Math.min(AI_SPEED * dt, d);
-    p.x += (dx / d) * step;
-    p.y += (dy / d) * step;
+    const nx = dx / d;
+    const ny = dy / d;
+    p.x += nx * step;
+    p.y += ny * step;
+    p.vx = nx * AI_SPEED;
+    p.vy = ny * AI_SPEED;
+  } else {
+    p.vx = 0;
+    p.vy = 0;
   }
   clampToSide(p, 'ai');
 }
 
 // ---- hit handlers -----------------------------------------------------------
 
+// Pick the rocket velocity given a forward sign (+1 = right, -1 = left) and
+// a y-ratio (the spike angle's tan component, clamped to ROCKET_MAX_Y_RATIO).
+// Magnitude always == ROCKET_SPEED.
+function rocketVelocity(forwardSign, yRatio) {
+  const r = Math.max(-ROCKET_MAX_Y_RATIO, Math.min(ROCKET_MAX_Y_RATIO, yRatio));
+  const mag = Math.sqrt(1 + r * r);
+  return {
+    vx: (forwardSign / mag) * ROCKET_SPEED,
+    vy: (r / mag) * ROCKET_SPEED,
+  };
+}
+
 function handleTeamHit(s, who) {
   s.hits += 1;
   s.lastToucher = who;
   s.touchCooldown = 0.22;
+  const hitter = s[who];
 
   if (s.hits >= 3) {
-    // Rocket punch: straight-line shot aimed at the midpoint between the AI
-    // defenders (plus small random offset). No gravity — rocket mode.
-    const gapY = (s.ai1.y + s.ai2.y) / 2 + (Math.random() - 0.5) * 40;
-    const clampedY = Math.max(COURT_TOP + 8, Math.min(COURT_BOTTOM - 8, gapY));
-    sendBallTo(s.ball, LOGICAL_W + 60, clampedY, ROCKET_SPEED);
+    // Rocket punch: the spike angle is set by the hitter's vertical velocity
+    // at contact time. Move up-right to bank off the top wall, down-right to
+    // bank off the bottom, or stand still for a straight shot.
+    const yRatio = (hitter.vy / PLAYER_SPEED) * ROCKET_MAX_Y_RATIO;
+    const v = rocketVelocity(+1, yRatio);
+    s.ball.vx = v.vx;
+    s.ball.vy = v.vy;
     s.ball.rocket = true;
   } else {
-    // Bump/set: launch as a 2D projectile toward the partner's current
-    // position. Initial velocity points forward (rightward, toward the
-    // midline); court gravity (leftward, -COURT_GRAVITY) drags it back so
-    // the flight visibly arcs out and then curves back to the partner.
+    // Bump/set: 2D projectile toward the partner's current position, BUT
+    // the hitter's current velocity is mixed in as a bias. Moving while
+    // hitting drags the arc in that direction — the partner has to
+    // anticipate and chase instead of parking.
     const other = who === 'p1' ? s.p2 : s.p1;
     launchArcTo(s.ball, other.x, other.y, -COURT_GRAVITY, BOUNCE_ARC_TIME);
+    s.ball.vx += hitter.vx * VELOCITY_BIAS;
+    s.ball.vy += hitter.vy * VELOCITY_BIAS;
     s.ball.rocket = false;
   }
 }
@@ -373,18 +409,26 @@ function handleAIHit(s, who) {
   s.hits += 1;
   s.lastToucher = who;
   s.touchCooldown = 0.22;
+  const hitter = s[who];
 
   if (s.hits >= 3) {
-    // AI rocket punch: aim at the midpoint between the two team players.
-    const gapY = (s.p1.y + s.p2.y) / 2 + (Math.random() - 0.5) * 40;
-    const clampedY = Math.max(COURT_TOP + 8, Math.min(COURT_BOTTOM - 8, gapY));
-    sendBallTo(s.ball, -60, clampedY, ROCKET_SPEED);
+    // AI rocket: random spike angle (the AI doesn't "choose" a direction
+    // like a human player would; the randomness keeps it from being a
+    // perfectly predictable straight shot every time).
+    const yRatio = (Math.random() - 0.5) * 2 * ROCKET_MAX_Y_RATIO;
+    const v = rocketVelocity(-1, yRatio);
+    s.ball.vx = v.vx;
+    s.ball.vy = v.vy;
     s.ball.rocket = true;
   } else {
-    // Mirror of the team's bump/set: forward (leftward) launch, rightward
-    // court gravity (+COURT_GRAVITY) drags it back to the other AI.
+    // Mirror of the team bump/set, including velocity bias. The AI is
+    // usually stationary during mid-rally holds (bias = 0 → clean arc),
+    // but when intercepting an incoming rocket on hit 1 they're moving
+    // toward the ball, which biases the bump away from their partner.
     const other = who === 'ai1' ? s.ai2 : s.ai1;
     launchArcTo(s.ball, other.x, other.y, +COURT_GRAVITY, BOUNCE_ARC_TIME);
+    s.ball.vx += hitter.vx * VELOCITY_BIAS;
+    s.ball.vy += hitter.vy * VELOCITY_BIAS;
     s.ball.rocket = false;
   }
 }
