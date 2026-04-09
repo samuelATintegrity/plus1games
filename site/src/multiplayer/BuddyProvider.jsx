@@ -112,8 +112,10 @@ export function BuddyProvider({ children }) {
     s.on('player-join', () => {
       // Re-announce meta so the new peer gets our nickname.
       s.send(makeBuddyMeta(nicknameRef.current));
-      // Enforce the cap: if we now have >1 other player, close.
-      if (s.players.length > 1) {
+      // Enforce the 2-player cap. `s.players` includes US, so the normal
+      // 2-player state has length 2. Only 3+ total means the pass is
+      // actually full — anything ≤ 2 is a healthy pairing.
+      if (s.players.length > 2) {
         setIsFull(true);
         if (onFull) onFull();
         closeSession();
