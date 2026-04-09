@@ -95,12 +95,17 @@ export function BuddyProvider({ children }) {
     sessionRef.current = s;
 
     s.on('open', () => {
-      setIsConnected(true);
-      // Announce nickname once on open
+      // Announce nickname once the socket opens. Note: we DON'T flip
+      // isConnected here — consumers like PongNetController need
+      // session.id to be populated, which only happens on the subsequent
+      // 'hello' message. Flipping isConnected too early causes any
+      // transport that calls getMyId() during setup to see null.
       s.send(makeBuddyMeta(nicknameRef.current));
     });
 
     s.on('hello', (hello) => {
+      // Now the session id is populated — safe to advertise as connected.
+      setIsConnected(true);
       // If 3+ players already here (including us), this pass is full.
       if ((hello.players?.length || 0) > 2) {
         setIsFull(true);

@@ -21,8 +21,12 @@ export async function joinRoom(code) {
   return session;
 }
 
+// Resolve once we've received the server's `hello` message — that's when
+// `session.id` is populated. Callers (e.g. PongNetController.electHost)
+// depend on `getMyId()` returning a non-null id, so resolving on bare
+// `open` would expose a race.
 function waitForOpen(session) {
   return new Promise((resolve) => {
-    const off = session.on('open', () => { off(); resolve(); });
+    const off = session.on('hello', () => { off(); resolve(); });
   });
 }
