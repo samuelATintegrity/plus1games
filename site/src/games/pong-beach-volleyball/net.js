@@ -25,6 +25,14 @@ import {
 } from '../../multiplayer/netProtocol.js';
 
 const SNAPSHOT_INTERVAL = 1 / 30; // 30 Hz
+// How far in the past the guest renders authoritative entities (p1/ai1/ai2/
+// ball). 100 ms gives us ~3 buffered snapshots at 30 Hz, which is enough to
+// always have two entries bracketing the render time so we can lerp instead
+// of step.
+const INTERP_DELAY_MS = 100;
+// Max length of the snapshot history buffer. ~400 ms at 30 Hz — enough for
+// ordinary jitter without growing unbounded.
+const SNAPSHOT_BUFFER_MAX = 12;
 
 export class PongNetController {
   /**
@@ -37,13 +45,18 @@ export class PongNetController {
     this.unsubscribeLeave = null;
 
     this.role = null;        // 'host' | 'guest' | null
-    this.guestKeys = {       // host reads this to drive P2
-      ArrowUp: false, ArrowDown: false, ArrowLeft: false, ArrowRight: false,
-    };
+    // Host reads this to drive P2. Abstract direction flags, not raw key
+    // codes — the wire format (and both sides' binding to arrow keys in
+    // networked mode) live outside the controller.
+    this.guestKeys = { up: false, down: false, left: false, right: false };
 
-    // Guest-side snapshot buffer
+    // Guest-side snapshot state
     this.latestSnapshot = null;
     this.latestSnapshotAppliedSeq = -1;
+    // Interpolation buffer — { recvT, snap } entries, newest at the end.
+    // Guest uses this to render the host's paddles and the ball ~100 ms
+    // in the past so there's always a bracketing pair to lerp between.
+    this._snapshotBuffer = [];
 
     // Callbacks
     this._onSnapshot = null;
@@ -57,7 +70,7 @@ export class PongNetController {
 
     // Guest send state
     this._inputSeq = 0;
-    this._lastSentKeys = { ArrowUp: false, ArrowDown: false, ArrowLeft: false, ArrowRight: false };
+    this._lastSentKeys = { up: false, down: false, left: false, right: false };
   }
 
   // Subscribe to raw messages once
@@ -69,16 +82,23 @@ export class PongNetController {
         case KIND.PONG_INPUT:
           // Host consumes guest input
           if (this.role === 'host' && data.keys) {
-            this.guestKeys.ArrowUp = !!data.keys.ArrowUp;
-            this.guestKeys.ArrowDown = !!data.keys.ArrowDown;
-            this.guestKeys.ArrowLeft = !!data.keys.ArrowLeft;
-            this.guestKeys.ArrowRight = !!data.keys.ArrowRight;
+            this.guestKeys.up = !!data.keys.up;
+            this.guestKeys.down = !!data.keys.down;
+            this.guestKeys.left = !!data.keys.left;
+            this.guestKeys.right = !!data.keys.right;
             if (data.startPressed && this._onStartPressed) this._onStartPressed();
           }
           break;
         case KIND.PONG_SNAPSHOT:
           if (this.role === 'guest') {
             this.latestSnapshot = data;
+            // Push into the interpolation buffer with a local recv
+            // timestamp. We use local performance.now() rather than any
+            // wire-provided t, since the host/guest clocks aren't synced.
+            this._snapshotBuffer.push({ recvT: performance.now(), snap: data });
+            if (this._snapshotBuffer.length > SNAPSHOT_BUFFER_MAX) {
+              this._snapshotBuffer.shift();
+            }
             if (this._onSnapshot) this._onSnapshot(data);
           }
           break;
@@ -206,15 +226,22 @@ export class PongNetController {
     this.t.send(makePongSnapshot(this._snapSeq, state));
   }
 
-  // Guest: send delta input on keydown/keyup only
-  sendGuestInput(keys, { startPressed = false } = {}) {
+  // Guest: send delta input on keydown/keyup only.
+  //
+  // `rawKeys` is the caller's raw keyboard state keyed by DOM `e.code`
+  // (e.g. `keysRef.current`). The controller maps Arrow* → abstract
+  // {up,down,left,right} flags so the wire format doesn't care what
+  // physical key drives the guest's paddle.
+  sendGuestInput(rawKeys, { startPressed = false } = {}) {
     if (this.role !== 'guest') return;
-    // Only send if something relevant changed OR startPressed is set.
-    const relevant = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'];
-    const now = {};
+    const now = {
+      up:    !!rawKeys.ArrowUp,
+      down:  !!rawKeys.ArrowDown,
+      left:  !!rawKeys.ArrowLeft,
+      right: !!rawKeys.ArrowRight,
+    };
     let changed = startPressed;
-    for (const k of relevant) {
-      now[k] = !!keys[k];
+    for (const k of ['up', 'down', 'left', 'right']) {
       if (now[k] !== this._lastSentKeys[k]) changed = true;
     }
     if (!changed) return;
@@ -238,6 +265,98 @@ export class PongNetController {
     this.latestSnapshotAppliedSeq = snap.seq;
     applyEntity(target.p1, snap.p1);
     applyEntity(target.p2, snap.p2);
+    applyEntity(target.ai1, snap.ai1);
+    applyEntity(target.ai2, snap.ai2);
+    if (snap.ball) {
+      target.ball.x = snap.ball.x;
+      target.ball.y = snap.ball.y;
+      target.ball.vx = snap.ball.vx;
+      target.ball.vy = snap.ball.vy;
+      target.ball.rocket = !!snap.ball.rocket;
+    }
+    if (snap.score) {
+      target.score.team = snap.score.team;
+      target.score.ai = snap.score.ai;
+    }
+    target.hits = snap.hits;
+    target.lastToucher = snap.lastToucher;
+    target.lastSide = snap.lastSide;
+    target.touchCooldown = snap.touchCooldown;
+    target.serveTimer = snap.serveTimer;
+    if (snap.aiAim !== undefined) target.aiAim = snap.aiAim;
+    return true;
+  }
+
+  // Apply an interpolated view of the buffered snapshots to `target`,
+  // rendering at `targetT` (a local performance.now() value). Only the
+  // opponent-controlled entities (p1/ai1/ai2/ball) are interpolated —
+  // the caller should preserve `target.p2` around this call since the
+  // guest owns it via client-side prediction.
+  //
+  // Discrete/scalar fields (score, hits, serveTimer, aiAim, ball.rocket,
+  // …) are copied from the newest snapshot in the bracketing pair, since
+  // they're not interpolable.
+  applyInterpolatedTo(target, targetT) {
+    const buf = this._snapshotBuffer;
+    if (buf.length === 0) return this.applyLatestSnapshotTo(target);
+
+    // Clamp to oldest/newest if targetT falls outside the buffer.
+    if (targetT <= buf[0].recvT) {
+      return this._applySnapDirect(target, buf[0].snap);
+    }
+    const newest = buf[buf.length - 1];
+    if (targetT >= newest.recvT) {
+      return this._applySnapDirect(target, newest.snap);
+    }
+
+    // Find bracketing pair [a, b] with a.recvT <= targetT <= b.recvT.
+    let a = buf[0];
+    let b = buf[buf.length - 1];
+    for (let i = 1; i < buf.length; i++) {
+      if (buf[i].recvT >= targetT) {
+        a = buf[i - 1];
+        b = buf[i];
+        break;
+      }
+    }
+    const span = b.recvT - a.recvT;
+    const t = span > 0 ? (targetT - a.recvT) / span : 1;
+
+    lerpEntity(target.p1, a.snap.p1, b.snap.p1, t);
+    lerpEntity(target.ai1, a.snap.ai1, b.snap.ai1, t);
+    lerpEntity(target.ai2, a.snap.ai2, b.snap.ai2, t);
+    if (a.snap.ball && b.snap.ball) {
+      target.ball.x  = lerp(a.snap.ball.x,  b.snap.ball.x,  t);
+      target.ball.y  = lerp(a.snap.ball.y,  b.snap.ball.y,  t);
+      target.ball.vx = lerp(a.snap.ball.vx, b.snap.ball.vx, t);
+      target.ball.vy = lerp(a.snap.ball.vy, b.snap.ball.vy, t);
+      target.ball.rocket = !!b.snap.ball.rocket;
+    }
+    // Discrete / scalar fields come from the newer entry.
+    if (b.snap.score) {
+      target.score.team = b.snap.score.team;
+      target.score.ai   = b.snap.score.ai;
+    }
+    target.hits          = b.snap.hits;
+    target.lastToucher   = b.snap.lastToucher;
+    target.lastSide      = b.snap.lastSide;
+    target.touchCooldown = b.snap.touchCooldown;
+    target.serveTimer    = b.snap.serveTimer;
+    if (b.snap.aiAim !== undefined) target.aiAim = b.snap.aiAim;
+    return true;
+  }
+
+  // Convenience wrapper — render 100 ms in the past using
+  // performance.now() as the clock.
+  applyInterpolatedToNow(target) {
+    return this.applyInterpolatedTo(target, performance.now() - INTERP_DELAY_MS);
+  }
+
+  // Shared helper: copy a snapshot onto the target without touching p2.
+  // Used as the fallback when targetT is outside the buffer's range.
+  _applySnapDirect(target, snap) {
+    if (!snap) return false;
+    applyEntity(target.p1, snap.p1);
     applyEntity(target.ai1, snap.ai1);
     applyEntity(target.ai2, snap.ai2);
     if (snap.ball) {
@@ -289,6 +408,18 @@ function applyEntity(target, src) {
   target.y = src.y;
   target.vx = src.vx;
   target.vy = src.vy;
+}
+
+function lerp(a, b, t) {
+  return a + (b - a) * t;
+}
+
+function lerpEntity(target, a, b, t) {
+  if (!target || !a || !b) return;
+  target.x  = lerp(a.x,  b.x,  t);
+  target.y  = lerp(a.y,  b.y,  t);
+  target.vx = lerp(a.vx, b.vx, t);
+  target.vy = lerp(a.vy, b.vy, t);
 }
 
 // ---- Transports -------------------------------------------------------------

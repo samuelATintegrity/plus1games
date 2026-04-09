@@ -372,12 +372,14 @@ export default function PongBeachVolleyball() {
 
       if (phaseRef.current === 'playing') {
         if (r === 'local') {
-          // Hotseat: one keyboard drives both paddles.
-          update(s, dt, keysRef.current, keysRef.current);
+          // Hotseat: one keyboard drives both paddles — WASD for P1,
+          // arrow keys for P2.
+          update(s, dt, wasdDir(keysRef.current), arrowDir(keysRef.current));
         } else if (r === 'host') {
-          // Host simulates with local keys for P1 and the guest's relayed
-          // keys for P2.
-          update(s, dt, keysRef.current, net ? net.guestKeys : {});
+          // Networked host: both remote players use arrow keys, so the
+          // host's P1 also reads arrow keys. P2 comes from the guest's
+          // relayed dir flags.
+          update(s, dt, arrowDir(keysRef.current), net ? net.guestKeys : EMPTY_DIR);
           // Broadcast snapshots at 30 Hz.
           if (net) {
             net.maybeSendSnapshot(
@@ -386,13 +388,13 @@ export default function PongBeachVolleyball() {
             );
           }
         } else if (r === 'guest') {
-          // Guest: apply the latest authoritative snapshot, but preserve
-          // our own predicted paddle (p2) so input feels instant. We save
-          // p2 before apply, let apply clobber everything else, then
-          // restore p2 and advance it one frame locally.
+          // Guest: render the host/AI/ball ~100 ms in the past using
+          // interpolated buffered snapshots so movement is smooth across
+          // 30 Hz snapshot gaps. P2 is preserved and predicted locally
+          // so the guest's own paddle has zero input lag.
           const savedP2 = { x: s.p2.x, y: s.p2.y, vx: s.p2.vx, vy: s.p2.vy };
           if (net) {
-            net.applyLatestSnapshotTo(s);
+            net.applyInterpolatedToNow(s);
             // Phase sync — host's snapshot is authoritative for phase.
             const authPhase = net.getAuthoritativePhase();
             if (authPhase && authPhase !== phaseRef.current) {
@@ -401,7 +403,7 @@ export default function PongBeachVolleyball() {
           }
           s.p2.x = savedP2.x; s.p2.y = savedP2.y;
           s.p2.vx = savedP2.vx; s.p2.vy = savedP2.vy;
-          // Predict our own paddle from local keys.
+          // Predict our own paddle from local arrow keys.
           movePlayer(
             s.p2,
             keysRef.current['ArrowUp'],
@@ -451,7 +453,7 @@ export default function PongBeachVolleyball() {
         {role === 'guest'
           ? 'YOU: ARROWS · YOUR BUDDY CONTROLS P1'
           : role === 'host'
-          ? 'YOU: WASD · YOUR BUDDY CONTROLS P2'
+          ? 'YOU: ARROWS · YOUR BUDDY CONTROLS P2'
           : game.mode !== 'local'
           ? 'WAITING FOR YOUR BUDDY TO JOIN...'
           : 'P1: WASD · P2: ARROWS · BUMP · SET · ROCKET.'}
@@ -503,7 +505,20 @@ function snapshotFromState(s, phase) {
 
 // ---- update -----------------------------------------------------------------
 
-function update(s, dt, p1Keys, p2Keys) {
+// Dir helpers — map raw keyboard state (keyed by DOM `e.code`) to the
+// abstract {up,down,left,right} booleans that `update()` consumes. This
+// is how we keep `update()` agnostic of which physical keys drive each
+// paddle: hotseat binds WASD→P1 and Arrows→P2, networked mode binds
+// Arrows→local player and guest dir flags→the other paddle.
+const EMPTY_DIR = { up: false, down: false, left: false, right: false };
+const wasdDir  = (k) => ({
+  up: !!k.KeyW, down: !!k.KeyS, left: !!k.KeyA, right: !!k.KeyD,
+});
+const arrowDir = (k) => ({
+  up: !!k.ArrowUp, down: !!k.ArrowDown, left: !!k.ArrowLeft, right: !!k.ArrowRight,
+});
+
+function update(s, dt, p1Dir, p2Dir) {
   // Pre-serve freeze.
   if (s.serveTimer > 0) {
     s.serveTimer -= dt;
@@ -511,8 +526,8 @@ function update(s, dt, p1Keys, p2Keys) {
   }
 
   // --- Player input ---
-  movePlayer(s.p1, p1Keys['KeyW'], p1Keys['KeyS'], p1Keys['KeyA'], p1Keys['KeyD'], dt, 'team');
-  movePlayer(s.p2, p2Keys['ArrowUp'], p2Keys['ArrowDown'], p2Keys['ArrowLeft'], p2Keys['ArrowRight'], dt, 'team');
+  movePlayer(s.p1, p1Dir.up, p1Dir.down, p1Dir.left, p1Dir.right, dt, 'team');
+  movePlayer(s.p2, p2Dir.up, p2Dir.down, p2Dir.left, p2Dir.right, dt, 'team');
 
   // --- AI movement (volleyball-aware) ---
   updateAI(s, dt);
