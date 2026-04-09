@@ -38,7 +38,16 @@ const MID_X = LOGICAL_W / 2;
 const PLAYER_RADIUS = 10;
 const BALL_RADIUS = 5;
 const PLAYER_SPEED = 170;   // px/s
-const AI_SPEED = 165;       // px/s
+const AI_SPEED = 130;       // px/s — slower than the player so a human can
+                            // punch a rocket past the intercept line if aimed
+                            // well.
+
+// Random aim error (in px) applied to the AI's predicted intercept Y on
+// each new rally. Re-rolled every time the ball crosses back to the AI's
+// side, so a fast rally has the same error throughout but the next point
+// is different. ±22 px is roughly 2× the player radius — enough to whiff
+// a well-placed rocket, small enough to still look intentional.
+const AI_AIM_ERROR_MAX = 22;
 
 // Bump/set arcs are computed as 2D projectiles with lateral "court gravity"
 // pulling the ball toward the rallying side's back wall. Tuned so the ball
@@ -136,6 +145,11 @@ function makeInitialState() {
     lastSide: 'ai',      // 'team' | 'ai' — current half the ball is on
     touchCooldown: 0,
     serveTimer: 0.9,
+    // Per-rally aim error applied to the AI's predicted intercept Y.
+    // Re-rolled every time the ball crosses onto the AI's side, so the
+    // AI doesn't perfectly track every rocket — some rallies it commits
+    // to the wrong line and a well-aimed shot gets past.
+    aiAim: 0,
   };
 }
 
@@ -460,6 +474,7 @@ function snapshotFromState(s, phase) {
     lastSide: s.lastSide,
     touchCooldown: s.touchCooldown,
     serveTimer: s.serveTimer,
+    aiAim: s.aiAim,
   };
 }
 
@@ -510,6 +525,12 @@ function update(s, dt, p1Keys, p2Keys) {
     s.lastToucher = null;
     s.lastSide = currentSide;
     s.ball.rocket = false;
+    // Re-roll the AI's per-rally aim error when the ball enters their
+    // side. This means each defensive attempt lands on a slightly wrong
+    // line, so a player who places a rocket well can score.
+    if (currentSide === 'ai') {
+      s.aiAim = (Math.random() - 0.5) * 2 * AI_AIM_ERROR_MAX;
+    }
   }
 
   if (s.touchCooldown > 0) s.touchCooldown -= dt;
@@ -591,11 +612,12 @@ function updateAI(s, dt) {
     // Ball on team side. If the team is mid-rally, start pre-positioning
     // toward the likely rocket lane — predict where the current ball will
     // cross AI_INTERCEPT_X and weight the rest Y toward that prediction.
+    // Apply the per-rally aim error so the AI's guess is slightly off.
     let anchorY = midY;
     if (!s.ball.rocket && s.hits > 0 && s.hits < 3) {
       // The ball is arcing; its vx can be small or wrong-signed, so fall
       // back to midY if prediction isn't meaningful.
-      if (ball.vx > 10) anchorY = predictBallY(ball, AI_INTERCEPT_X);
+      if (ball.vx > 10) anchorY = predictBallY(ball, AI_INTERCEPT_X) + s.aiAim;
     }
     const topRestY = Math.max(COURT_TOP + PLAYER_RADIUS + 4, anchorY - 34);
     const botRestY = Math.min(COURT_BOTTOM - PLAYER_RADIUS - 4, anchorY + 34);
@@ -607,9 +629,11 @@ function updateAI(s, dt) {
   // Ball on AI side.
   if (s.hits === 0 || s.ball.rocket) {
     // Incoming rocket or fresh ball. Predict the intercept Y including
-    // wall bounces. The AI that's vertically closer to that prediction
-    // handles it; the other drops to cover the opposite half.
-    const predictedY = predictBallY(ball, AI_INTERCEPT_X);
+    // wall bounces, then bias it by the per-rally aim error so the AI
+    // commits to a slightly wrong line — a well-placed rocket can slip
+    // past. The striker and support assignment still uses the biased
+    // target so the AI is consistent with itself.
+    const predictedY = predictBallY(ball, AI_INTERCEPT_X) + s.aiAim;
     const d1 = Math.abs(ai1.y - predictedY);
     const d2 = Math.abs(ai2.y - predictedY);
     const [striker, support] = d1 <= d2 ? [ai1, ai2] : [ai2, ai1];

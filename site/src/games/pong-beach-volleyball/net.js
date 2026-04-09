@@ -226,6 +226,7 @@ export class PongNetController {
     target.lastSide = snap.lastSide;
     target.touchCooldown = snap.touchCooldown;
     target.serveTimer = snap.serveTimer;
+    if (snap.aiAim !== undefined) target.aiAim = snap.aiAim;
     return true;
   }
 
