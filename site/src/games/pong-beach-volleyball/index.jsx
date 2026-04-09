@@ -18,6 +18,12 @@
 //   Player 2: Arrow keys
 
 import { useEffect, useRef, useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useLayoutMode } from '../../layout/LayoutModeContext.jsx';
+import { useBuddy } from '../../multiplayer/BuddyProvider.jsx';
+import RoomCodePanel from '../../components/RoomCodePanel.jsx';
+import { PongNetController } from './net.js';
+import { useGameSession } from './useGameSession.js';
 
 // ---- constants --------------------------------------------------------------
 
@@ -136,28 +142,169 @@ function makeInitialState() {
 // ---- component --------------------------------------------------------------
 
 export default function PongBeachVolleyball() {
+  useLayoutMode('fullscreen');
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const buddy = useBuddy();
+  const game = useGameSession({ buddy, searchParams });
+
   const canvasRef = useRef(null);
   const stateRef = useRef(makeInitialState());
   const keysRef = useRef({});
   const phaseRef = useRef('menu');
   const [phase, setPhase] = useState('menu');
 
-  useEffect(() => { phaseRef.current = phase; }, [phase]);
+  // Networking refs
+  const netRef = useRef(null);            // PongNetController | null
+  const roleRef = useRef('local');        // 'local' | 'host' | 'guest'
+  const [role, setRole] = useState('local');
+  const [overlay, setOverlay] = useState(null); // { title, sub } | null
+  const overlayRef = useRef(null);
+  const lastSeenPeerRef = useRef(performance.now());
 
-  // Keyboard — stable listener, no phase dep.
+  useEffect(() => { phaseRef.current = phase; }, [phase]);
+  useEffect(() => { roleRef.current = role; }, [role]);
+  useEffect(() => { overlayRef.current = overlay; }, [overlay]);
+
+  // Notify buddies we entered this game on mount; notify leave on unmount.
   useEffect(() => {
-    const down = (e) => {
-      keysRef.current[e.code] = true;
-      if ((phaseRef.current === 'menu' || phaseRef.current === 'over') &&
-          (e.code === 'Space' || e.code === 'Enter')) {
+    if (buddy.isActive) {
+      buddy.notifyEnterGame('pong-beach-volleyball', '/games/pong-beach-volleyball');
+    }
+    return () => {
+      if (buddy.isActive) {
+        buddy.notifyLeaveGame('pong-beach-volleyball');
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [buddy.isActive]);
+
+  // Set up the PongNetController whenever the game transport becomes available
+  // (buddy session connects, room-code session opens, etc.). Tears down when
+  // the transport goes away. Host election runs once here on phase → 'playing'
+  // in a separate effect below.
+  useEffect(() => {
+    if (!game.transport) {
+      netRef.current = null;
+      setRole('local');
+      return () => {};
+    }
+    const net = new PongNetController({ transport: game.transport });
+    netRef.current = net;
+
+    // Guest snapshot arrival → bump peer-activity timer, and if we were
+    // waiting, clear the overlay.
+    net.onSnapshot(() => {
+      lastSeenPeerRef.current = performance.now();
+      if (overlayRef.current?.title === 'WAITING FOR HOST...') setOverlay(null);
+    });
+
+    // Host gets a "request-state" from a newly-arrived guest → send a snapshot
+    // that includes the current phase, so the guest immediately sees the
+    // right screen.
+    net.onRequestState(() => {
+      net.sendSnapshotNow(snapshotFromState(stateRef.current, phaseRef.current));
+    });
+
+    // Host receives a Space press from the guest → treat it as a local start.
+    net.onStartPressed(() => {
+      if (roleRef.current !== 'host') return;
+      if (phaseRef.current === 'menu' || phaseRef.current === 'over') {
         stateRef.current = makeInitialState();
         setPhase('playing');
       }
+    });
+
+    // Peer disconnect
+    net.onPlayerLeave(() => {
+      if (roleRef.current === 'guest') {
+        setOverlay({ title: 'BUDDY DISCONNECTED', sub: 'RETURNING TO ARCADE' });
+        setTimeout(() => navigate('/'), 3000);
+      } else if (roleRef.current === 'host') {
+        setOverlay({ title: 'WAITING FOR BUDDY...', sub: 'RETURNING IN 15s' });
+        setTimeout(() => navigate('/'), 15000);
+      }
+    });
+
+    return () => {
+      try { net.close(); } catch {}
+      netRef.current = null;
+    };
+  }, [game.transport, navigate]);
+
+  // Host: push an immediate snapshot whenever the phase changes. The 30Hz
+  // broadcast loop only runs during 'playing', so without this, menu→playing
+  // and playing→over transitions wouldn't reach the guest.
+  useEffect(() => {
+    if (role !== 'host' || !netRef.current) return;
+    netRef.current.sendSnapshotNow(snapshotFromState(stateRef.current, phase));
+  }, [role, phase]);
+
+  // Host election — runs when phase transitions to 'playing' and we have a
+  // net controller. If we're already in a playing session (e.g. a guest
+  // joined mid-match), election runs too.
+  useEffect(() => {
+    const net = netRef.current;
+    if (!net) { setRole('local'); return; }
+    let cancelled = false;
+    net.electHost({ timeoutMs: 4000 }).then(({ role: r, peerMissing }) => {
+      if (cancelled) return;
+      setRole(r);
+      if (r === 'guest') {
+        // Ask the host for the current state immediately and show a brief
+        // waiting indicator until the first snapshot arrives.
+        net.requestState();
+        setOverlay({ title: 'WAITING FOR HOST...', sub: '' });
+        setTimeout(() => {
+          if (overlayRef.current?.title === 'WAITING FOR HOST...') setOverlay(null);
+        }, 2000);
+      } else if (r === 'host' && peerMissing) {
+        // No peer answered — treat as effectively local until one arrives.
+        // Keep role as 'host' so snapshots start going out once a peer joins.
+      }
+    });
+    return () => { cancelled = true; };
+  }, [game.transport]);
+
+  // Keyboard — stable listener. Must know current role to decide whether a
+  // Space press starts the game locally (host/local) or gets relayed (guest).
+  useEffect(() => {
+    const down = (e) => {
+      const wasDown = !!keysRef.current[e.code];
+      keysRef.current[e.code] = true;
+
+      // Start-game handling
+      if ((phaseRef.current === 'menu' || phaseRef.current === 'over') &&
+          (e.code === 'Space' || e.code === 'Enter')) {
+        if (roleRef.current === 'guest') {
+          // Relay the start press to the host; the host's snapshot will
+          // flip the phase back on our side.
+          netRef.current?.sendGuestInput(keysRef.current, { startPressed: true });
+        } else {
+          stateRef.current = makeInitialState();
+          setPhase('playing');
+        }
+      }
+
+      // Guest input delta on arrow keys
+      if (roleRef.current === 'guest' && !wasDown &&
+          (e.code === 'ArrowUp' || e.code === 'ArrowDown' ||
+           e.code === 'ArrowLeft' || e.code === 'ArrowRight')) {
+        netRef.current?.sendGuestInput(keysRef.current);
+      }
+
       if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) {
         e.preventDefault();
       }
     };
-    const up = (e) => { keysRef.current[e.code] = false; };
+    const up = (e) => {
+      keysRef.current[e.code] = false;
+      if (roleRef.current === 'guest' &&
+          (e.code === 'ArrowUp' || e.code === 'ArrowDown' ||
+           e.code === 'ArrowLeft' || e.code === 'ArrowRight')) {
+        netRef.current?.sendGuestInput(keysRef.current);
+      }
+    };
     window.addEventListener('keydown', down);
     window.addEventListener('keyup', up);
     return () => {
@@ -185,37 +332,140 @@ export default function PongBeachVolleyball() {
       lastT = nowT;
 
       const s = stateRef.current;
+      const r = roleRef.current;
+      const net = netRef.current;
+
       if (phaseRef.current === 'playing') {
-        update(s, dt, keysRef.current);
-        if (s.score.team >= WIN_SCORE || s.score.ai >= WIN_SCORE) {
+        if (r === 'local') {
+          // Hotseat: one keyboard drives both paddles.
+          update(s, dt, keysRef.current, keysRef.current);
+        } else if (r === 'host') {
+          // Host simulates with local keys for P1 and the guest's relayed
+          // keys for P2.
+          update(s, dt, keysRef.current, net ? net.guestKeys : {});
+          // Broadcast snapshots at 30 Hz.
+          if (net) {
+            net.maybeSendSnapshot(
+              snapshotFromState(s, phaseRef.current),
+              dt
+            );
+          }
+        } else if (r === 'guest') {
+          // Guest: apply the latest authoritative snapshot, but preserve
+          // our own predicted paddle (p2) so input feels instant. We save
+          // p2 before apply, let apply clobber everything else, then
+          // restore p2 and advance it one frame locally.
+          const savedP2 = { x: s.p2.x, y: s.p2.y, vx: s.p2.vx, vy: s.p2.vy };
+          if (net) {
+            net.applyLatestSnapshotTo(s);
+            // Phase sync — host's snapshot is authoritative for phase.
+            const authPhase = net.getAuthoritativePhase();
+            if (authPhase && authPhase !== phaseRef.current) {
+              setPhase(authPhase);
+            }
+          }
+          s.p2.x = savedP2.x; s.p2.y = savedP2.y;
+          s.p2.vx = savedP2.vx; s.p2.vy = savedP2.vy;
+          // Predict our own paddle from local keys.
+          movePlayer(
+            s.p2,
+            keysRef.current['ArrowUp'],
+            keysRef.current['ArrowDown'],
+            keysRef.current['ArrowLeft'],
+            keysRef.current['ArrowRight'],
+            dt,
+            'team'
+          );
+          // Reconcile: if local prediction drifts too far from server truth,
+          // snap back. Threshold is generous (16 px) to avoid rubber-banding
+          // under normal RTT.
+          const authP2 = net?.getAuthoritativeP2();
+          if (authP2) {
+            const dx = s.p2.x - authP2.x;
+            const dy = s.p2.y - authP2.y;
+            if (dx * dx + dy * dy > 256) {
+              s.p2.x = authP2.x;
+              s.p2.y = authP2.y;
+            }
+          }
+        }
+
+        if (r !== 'guest' &&
+            (s.score.team >= WIN_SCORE || s.score.ai >= WIN_SCORE)) {
           setPhase('over');
         }
+      } else if (r === 'guest' && net) {
+        // Still apply snapshots so score/menu state render correctly.
+        net.applyLatestSnapshotTo(s);
+        const authPhase = net.getAuthoritativePhase();
+        if (authPhase && authPhase !== phaseRef.current) {
+          setPhase(authPhase);
+        }
       }
-      draw(ctx, s, phaseRef.current);
+
+      draw(ctx, s, phaseRef.current, overlayRef.current, roleRef.current);
     };
     raf = requestAnimationFrame(frame);
     return () => cancelAnimationFrame(raf);
   }, []);
 
   return (
-    <div className="flex flex-col items-center gap-3">
+    <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-gb-darkest">
       <h2 className="font-pixel text-gb-lightest text-sm">PONG: BEACH VOLLEYBALL</h2>
       <p className="text-[10px] text-gb-light text-center max-w-md">
-        P1: WASD &nbsp;·&nbsp; P2: ARROWS &nbsp;·&nbsp; BUMP · SET · ROCKET.
-        Don't whiff your partner's pass — the ball drifts back and scores on you.
+        {role === 'guest'
+          ? 'YOU: ARROWS · YOUR BUDDY CONTROLS P1'
+          : role === 'host'
+          ? 'YOU: WASD · YOUR BUDDY CONTROLS P2'
+          : 'P1: WASD · P2: ARROWS · BUMP · SET · ROCKET.'}
       </p>
       <canvas
         ref={canvasRef}
         className="border-2 border-gb-dark"
         style={{ imageRendering: 'pixelated' }}
       />
+      <div className="flex items-center gap-4">
+        <button
+          type="button"
+          onClick={() => navigate('/')}
+          className="text-[10px] text-gb-light hover:text-gb-lightest underline"
+        >
+          ← Arcade
+        </button>
+        {game.mode === 'room' && (
+          <span className="text-[10px] text-gb-light">
+            ROOM: {searchParams.get('room')}
+            {!game.ready && ' · WAITING...'}
+          </span>
+        )}
+      </div>
+      {/* Offer room-code fallback only in pure local mode (no buddy, no ?room) */}
+      {game.mode === 'local' && !buddy.isActive && phase === 'menu' && (
+        <RoomCodePanel />
+      )}
     </div>
   );
 }
 
+// Build a wire snapshot from the local state ref. Separated so both the
+// RAF host branch and the request-state responder can use it.
+function snapshotFromState(s, phase) {
+  return {
+    phase,
+    p1: s.p1, p2: s.p2, ai1: s.ai1, ai2: s.ai2,
+    ball: s.ball,
+    score: s.score,
+    hits: s.hits,
+    lastToucher: s.lastToucher,
+    lastSide: s.lastSide,
+    touchCooldown: s.touchCooldown,
+    serveTimer: s.serveTimer,
+  };
+}
+
 // ---- update -----------------------------------------------------------------
 
-function update(s, dt, keys) {
+function update(s, dt, p1Keys, p2Keys) {
   // Pre-serve freeze.
   if (s.serveTimer > 0) {
     s.serveTimer -= dt;
@@ -223,8 +473,8 @@ function update(s, dt, keys) {
   }
 
   // --- Player input ---
-  movePlayer(s.p1, keys['KeyW'], keys['KeyS'], keys['KeyA'], keys['KeyD'], dt, 'team');
-  movePlayer(s.p2, keys['ArrowUp'], keys['ArrowDown'], keys['ArrowLeft'], keys['ArrowRight'], dt, 'team');
+  movePlayer(s.p1, p1Keys['KeyW'], p1Keys['KeyS'], p1Keys['KeyA'], p1Keys['KeyD'], dt, 'team');
+  movePlayer(s.p2, p2Keys['ArrowUp'], p2Keys['ArrowDown'], p2Keys['ArrowLeft'], p2Keys['ArrowRight'], dt, 'team');
 
   // --- AI movement (volleyball-aware) ---
   updateAI(s, dt);
@@ -482,7 +732,7 @@ function startServe(s, to) {
 
 // ---- draw -------------------------------------------------------------------
 
-function draw(ctx, s, phase) {
+function draw(ctx, s, phase, overlay, role) {
   // Sand court background
   ctx.fillStyle = C.light;
   ctx.fillRect(0, 0, LOGICAL_W, LOGICAL_H);
@@ -570,11 +820,27 @@ function draw(ctx, s, phase) {
   ctx.fillText(`FIRST TO ${WIN_SCORE}`, MID_X, 6);
 
   // Phase overlays
-  if (phase === 'menu') {
-    drawCenterBanner(ctx, 'PRESS SPACE TO START', 'P1: WASD  —  P2: ARROWS');
+  if (overlay) {
+    drawCenterBanner(ctx, overlay.title, overlay.sub || '');
+  } else if (phase === 'menu') {
+    const sub = role === 'guest'
+      ? 'WAITING ON HOST OR PRESS SPACE'
+      : role === 'host'
+      ? 'PRESS SPACE — YOU ARE HOST'
+      : 'P1: WASD  —  P2: ARROWS';
+    drawCenterBanner(ctx, 'PRESS SPACE TO START', sub);
   } else if (phase === 'over') {
     const msg = s.score.team >= WIN_SCORE ? 'YOU WIN!' : 'AI WINS';
     drawCenterBanner(ctx, msg, 'PRESS SPACE TO PLAY AGAIN');
+  }
+
+  // Role badge (top-right corner of the HUD strip)
+  if (role && role !== 'local') {
+    ctx.fillStyle = C.lightest;
+    ctx.font = 'bold 7px monospace';
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'top';
+    ctx.fillText(`NET: ${role.toUpperCase()}`, LOGICAL_W - 8, 18);
   }
 }
 
