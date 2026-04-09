@@ -12,7 +12,21 @@
 
 import PartySocket from 'partysocket';
 
-const HOST = import.meta.env.VITE_PARTYKIT_HOST || '127.0.0.1:1999';
+// Resolve the PartyKit host. Priority:
+//   1. VITE_PARTYKIT_HOST env var (local override)
+//   2. 127.0.0.1:1999 in dev mode (vite dev server)
+//   3. The deployed production partykit host (fallback for production builds)
+//
+// The production host is hardcoded here because the site is built by
+// Cloudflare Workers Builds on every push, and that build environment
+// doesn't have site/.env (it's gitignored). Without this fallback, the
+// production bundle would be baked with 127.0.0.1:1999 and no buddy pass
+// or multiplayer session would ever connect.
+const HOST =
+  import.meta.env.VITE_PARTYKIT_HOST ||
+  (import.meta.env.DEV
+    ? '127.0.0.1:1999'
+    : 'plus1games.samuelatintegrity.partykit.dev');
 
 export class Session {
   constructor(type, room, meta = {}) {
