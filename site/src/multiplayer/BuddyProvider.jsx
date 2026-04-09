@@ -67,7 +67,12 @@ export function BuddyProvider({ children }) {
   const [nickname, setNicknameState] = useState(() => loadNickname() || defaultNickname());
   const [isConnected, setIsConnected] = useState(false);
   const [isFull, setIsFull] = useState(false);
-  const [, bumpRender] = useState(0);
+  // `bumpTick` is exposed in the context value's memoization deps so that
+  // calling `bumpRender()` actually propagates to consumers. A plain
+  // `useState(0)` with the setter alone re-rendered BuddyProvider but left
+  // the memoized value unchanged, and context consumers never re-rendered.
+  const [bumpTick, setBumpTick] = useState(0);
+  const bumpRender = useCallback(() => setBumpTick((n) => (n + 1) | 0), []);
   const sessionRef = useRef(null);
   const remotePlayersRef = useRef(new Map()); // id → {x,y,nickname,gameId,curT,prevX,prevY,prevT}
   const localGameIdRef = useRef(null);
@@ -129,7 +134,7 @@ export function BuddyProvider({ children }) {
 
     s.on('player-leave', ({ playerId }) => {
       remotePlayersRef.current.delete(playerId);
-      bumpRender((n) => n + 1);
+      bumpRender();
       // Forward to any subscribers (e.g. PongNetController)
       for (const cb of playerLeaveListenersRef.current) cb({ playerId });
     });
@@ -148,10 +153,11 @@ export function BuddyProvider({ children }) {
           const r = remotePlayersRef.current.get(from) || newRemote();
           r.nickname = data.nickname || r.nickname || 'Buddy';
           remotePlayersRef.current.set(from, r);
-          bumpRender((n) => n + 1);
+          bumpRender();
           break;
         }
         case KIND.PRESENCE: {
+          const wasNew = !remotePlayersRef.current.has(from);
           const r = remotePlayersRef.current.get(from) || newRemote();
           // Shift current → prev for interpolation
           r.prevX = r.curX ?? data.x;
@@ -163,6 +169,10 @@ export function BuddyProvider({ children }) {
           if (data.nickname) r.nickname = data.nickname;
           r.gameId = data.gameId ?? null;
           remotePlayersRef.current.set(from, r);
+          // First presence from a previously-unseen peer — trigger a
+          // re-render so consumers (BuddyChip, etc.) pick up the new
+          // entry. Subsequent presence ticks at 15 Hz don't bump.
+          if (wasNew) bumpRender();
           break;
         }
         case KIND.ENTER_GAME: {
@@ -179,7 +189,7 @@ export function BuddyProvider({ children }) {
               nickname: data.nickname || r.nickname,
             });
           }
-          bumpRender((n) => n + 1);
+          bumpRender();
           break;
         }
         case KIND.LEAVE_GAME: {
@@ -188,7 +198,7 @@ export function BuddyProvider({ children }) {
             r.gameId = null;
             remotePlayersRef.current.set(from, r);
           }
-          bumpRender((n) => n + 1);
+          bumpRender();
           break;
         }
         default:
@@ -200,6 +210,21 @@ export function BuddyProvider({ children }) {
   // A ref that tracks the latest nickname without re-running openSession
   const nicknameRef = useRef(nickname);
   useEffect(() => { nicknameRef.current = nickname; }, [nickname]);
+
+  // Periodic BUDDY_META rebroadcast. The open/player-join handlers already
+  // fire buddy-meta at the right moments, but a message can race ahead of
+  // the peer's subscription during reconnects. A cheap 5 s heartbeat keeps
+  // the remote name populated everywhere without spamming the wire.
+  useEffect(() => {
+    if (!isConnected) return;
+    const id = setInterval(() => {
+      const s = sessionRef.current;
+      if (s) {
+        try { s.send(makeBuddyMeta(nicknameRef.current)); } catch {}
+      }
+    }, 5000);
+    return () => clearInterval(id);
+  }, [isConnected]);
 
   // Bootstrap: check URL then localStorage
   useEffect(() => {
@@ -351,6 +376,7 @@ export function BuddyProvider({ children }) {
     sendBuddyMessage,
     getSessionId,
   }), [
+    bumpTick,
     pairId, isConnected, isFull, shareUrl, shareCode, nickname,
     createBuddyPass, joinBuddyPass, leaveBuddyPass, setNickname,
     notifyEnterGame, notifyLeaveGame,

@@ -38,16 +38,21 @@ const MID_X = LOGICAL_W / 2;
 const PLAYER_RADIUS = 10;
 const BALL_RADIUS = 5;
 const PLAYER_SPEED = 170;   // px/s
-const AI_SPEED = 130;       // px/s — slower than the player so a human can
-                            // punch a rocket past the intercept line if aimed
-                            // well.
+const AI_SPEED = 150;       // px/s — slightly slower than the player. Enough
+                            // that a well-aimed rocket can outrun the AI, but
+                            // quick enough that sloppy shots get returned.
 
 // Random aim error (in px) applied to the AI's predicted intercept Y on
 // each new rally. Re-rolled every time the ball crosses back to the AI's
 // side, so a fast rally has the same error throughout but the next point
-// is different. ±22 px is roughly 2× the player radius — enough to whiff
-// a well-placed rocket, small enough to still look intentional.
-const AI_AIM_ERROR_MAX = 22;
+// is different. ±14 px is a bit more than one player radius — enough to
+// whiff a surgically-placed rocket, small enough to still look intentional.
+const AI_AIM_ERROR_MAX = 14;
+
+// AI rocket angle range as a fraction of ROCKET_MAX_Y_RATIO. 1.0 = full
+// spike range (very hard to read); 0.5 = mostly horizontal shots that a
+// human can track and intercept.
+const AI_ROCKET_Y_RANGE = 0.5;
 
 // Bump/set arcs are computed as 2D projectiles with lateral "court gravity"
 // pulling the ball toward the rallying side's back wall. Tuned so the ball
@@ -737,10 +742,11 @@ function handleAIHit(s, who) {
   const hitter = s[who];
 
   if (s.hits >= 3) {
-    // AI rocket: random spike angle (the AI doesn't "choose" a direction
-    // like a human player would; the randomness keeps it from being a
-    // perfectly predictable straight shot every time).
-    const yRatio = (Math.random() - 0.5) * 2 * ROCKET_MAX_Y_RATIO;
+    // AI rocket: random spike angle, clamped to AI_ROCKET_Y_RANGE of the
+    // full spike range. This keeps the AI's shots mostly horizontal so a
+    // human defender can track and intercept them. Without the clamp the
+    // AI lands spikes the player has no chance to read.
+    const yRatio = (Math.random() - 0.5) * 2 * ROCKET_MAX_Y_RATIO * AI_ROCKET_Y_RANGE;
     const v = rocketVelocity(-1, yRatio);
     s.ball.vx = v.vx;
     s.ball.vy = v.vy;
