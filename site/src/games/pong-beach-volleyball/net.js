@@ -113,24 +113,35 @@ export class PongNetController {
     }
   }
 
-  // Perform host election. Sends pong-ready and waits for the peer's
-  // pong-ready (or times out at `timeoutMs` and becomes host).
-  electHost({ timeoutMs = 4000 } = {}) {
+  // Perform host election. Sends pong-ready repeatedly until the peer's
+  // pong-ready arrives; resolves lex-min on the pair of ids. No timeout —
+  // networked mode is meant for two real players, so we wait indefinitely
+  // for the second one. The periodic rebroadcast (every 600 ms) ensures a
+  // late-joining peer receives our readiness even if they arrived after
+  // our first send, without requiring them to be online when we started.
+  //
+  // Cancellation: the caller holds the returned promise; if the component
+  // unmounts before resolution, it should call `cancelElection()`.
+  electHost() {
     this._ensureSubscribed();
     const myId = this.t.getMyId();
-    this.t.send(makePongReady({ myId }));
+    const sendReady = () => this.t.send(makePongReady({
+      myId: this.t.getMyId(),
+      committedRole: this.role || null,
+    }));
+    sendReady();
 
     return new Promise((resolve) => {
       let done = false;
       let peerId = null;
       let peerCommittedRole = null;
       let peekUnsub = null;
-      let timer = null;
+      let pollTimer = null;
 
       const finish = () => {
         if (done) return;
         done = true;
-        if (timer) clearTimeout(timer);
+        if (pollTimer) clearInterval(pollTimer);
         if (peekUnsub) peekUnsub();
         let role, hostId, otherId;
         if (peerCommittedRole) {
@@ -143,7 +154,14 @@ export class PongNetController {
           ({ role, hostId, otherId } = electHost(myId, others));
         }
         this.role = role;
-        resolve({ role, hostId, otherId, peerMissing: !peerId });
+        // Broadcast our committed role immediately so the peer finishes
+        // their own election on the next message rather than after their
+        // next poll tick.
+        this.t.send(makePongReady({
+          myId: this.t.getMyId(),
+          committedRole: this.role,
+        }));
+        resolve({ role, hostId, otherId });
       };
 
       peekUnsub = this.t.subscribe(({ data }) => {
@@ -154,8 +172,20 @@ export class PongNetController {
           finish();
         }
       });
-      timer = setTimeout(finish, timeoutMs);
+      // Keep rebroadcasting our readiness so any peer that joins after
+      // us picks up the handshake without waiting on their own resends.
+      pollTimer = setInterval(sendReady, 600);
+      this._electionCancel = () => {
+        if (done) return;
+        done = true;
+        if (pollTimer) clearInterval(pollTimer);
+        if (peekUnsub) peekUnsub();
+      };
     });
+  }
+
+  cancelElection() {
+    if (this._electionCancel) { this._electionCancel(); this._electionCancel = null; }
   }
 
   // Host: call once per frame with (state, dtSeconds). Sends a snapshot
@@ -247,6 +277,7 @@ export class PongNetController {
   onPlayerLeave(cb) { this._onPlayerLeave = cb; }
 
   close() {
+    this.cancelElection();
     if (this.unsubscribeRaw) { this.unsubscribeRaw(); this.unsubscribeRaw = null; }
     if (this.unsubscribeLeave) { this.unsubscribeLeave(); this.unsubscribeLeave = null; }
   }

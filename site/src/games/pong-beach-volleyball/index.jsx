@@ -254,16 +254,26 @@ export default function PongBeachVolleyball() {
     netRef.current.sendSnapshotNow(snapshotFromState(stateRef.current, phase));
   }, [role, phase]);
 
-  // Host election — runs when phase transitions to 'playing' and we have a
-  // net controller. If we're already in a playing session (e.g. a guest
-  // joined mid-match), election runs too.
+  // Host election — runs as soon as we have a net controller. Waits
+  // indefinitely for the second player; shows a "WAITING FOR PLAYER 2"
+  // overlay until the peer arrives so the user isn't tempted to start a
+  // hotseat game in what is really a networked room.
   useEffect(() => {
     const net = netRef.current;
     if (!net) { setRole('local'); return; }
     let cancelled = false;
-    net.electHost({ timeoutMs: 4000 }).then(({ role: r, peerMissing }) => {
+
+    // Block play while we wait for a peer in networked mode.
+    setOverlay({
+      title: 'WAITING FOR PLAYER 2',
+      sub: game.mode === 'room' ? 'SHARE YOUR ROOM CODE' : 'SHARE YOUR BUDDY LINK',
+    });
+
+    net.electHost().then(({ role: r }) => {
       if (cancelled) return;
       setRole(r);
+      // Clear the waiting overlay — the peer is here.
+      if (overlayRef.current?.title === 'WAITING FOR PLAYER 2') setOverlay(null);
       if (r === 'guest') {
         // Ask the host for the current state immediately and show a brief
         // waiting indicator until the first snapshot arrives.
@@ -272,13 +282,13 @@ export default function PongBeachVolleyball() {
         setTimeout(() => {
           if (overlayRef.current?.title === 'WAITING FOR HOST...') setOverlay(null);
         }, 2000);
-      } else if (r === 'host' && peerMissing) {
-        // No peer answered — treat as effectively local until one arrives.
-        // Keep role as 'host' so snapshots start going out once a peer joins.
       }
     });
-    return () => { cancelled = true; };
-  }, [game.transport]);
+    return () => {
+      cancelled = true;
+      try { net.cancelElection(); } catch {}
+    };
+  }, [game.transport, game.mode]);
 
   // Keyboard — stable listener. Must know current role to decide whether a
   // Space press starts the game locally (host/local) or gets relayed (guest).
@@ -290,6 +300,12 @@ export default function PongBeachVolleyball() {
       // Start-game handling
       if ((phaseRef.current === 'menu' || phaseRef.current === 'over') &&
           (e.code === 'Space' || e.code === 'Enter')) {
+        // Block start while the "waiting for player 2" overlay is up —
+        // election hasn't resolved yet in networked mode.
+        if (overlayRef.current?.title === 'WAITING FOR PLAYER 2') {
+          e.preventDefault();
+          return;
+        }
         if (roleRef.current === 'guest') {
           // Relay the start press to the host; the host's snapshot will
           // flip the phase back on our side.
@@ -431,6 +447,8 @@ export default function PongBeachVolleyball() {
           ? 'YOU: ARROWS · YOUR BUDDY CONTROLS P1'
           : role === 'host'
           ? 'YOU: WASD · YOUR BUDDY CONTROLS P2'
+          : game.mode !== 'local'
+          ? 'WAITING FOR YOUR BUDDY TO JOIN...'
           : 'P1: WASD · P2: ARROWS · BUMP · SET · ROCKET.'}
       </p>
       <canvas
