@@ -1,3 +1,5 @@
+@import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -9,5 +11,4 @@ html, body, #root {
 
 body {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  image-rendering: pixelated;
 }

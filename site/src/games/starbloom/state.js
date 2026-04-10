@@ -3,12 +3,12 @@
 import { generateMap } from './map.js';
 import { makeBuilding, makeUnit, UNIT_DEFS, BUILDING_DEFS } from './entities.js';
 
-// GameBoy DMG palette
+// DSi-inspired canvas palette
 export const C = {
-  darkest:  '#0f380f',
-  dark:     '#306230',
-  light:    '#8bac0f',
-  lightest: '#9bbc0f',
+  darkest:  '#0d1b2a',
+  dark:     '#2b4162',
+  light:    '#5fa8d3',
+  lightest: '#d1e3f0',
 };
 
 // Display

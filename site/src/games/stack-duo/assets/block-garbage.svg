@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 5 5" width="5" height="5">
+  <!-- Garbage block — dark gray with crosshatch -->
+  <rect x="0.5" y="0.5" width="4" height="4" rx="0.3" fill="#3a3a4a" stroke="#222233" stroke-width="0.5"/>
+  <!-- Crosshatch lines -->
+  <line x1="0.5" y1="4.5" x2="4.5" y2="0.5" stroke="#555566" stroke-width="0.3" opacity="0.5"/>
+  <line x1="0.5" y1="2.5" x2="2.5" y2="0.5" stroke="#555566" stroke-width="0.3" opacity="0.5"/>
+  <line x1="2.5" y1="4.5" x2="4.5" y2="2.5" stroke="#555566" stroke-width="0.3" opacity="0.5"/>
+</svg>

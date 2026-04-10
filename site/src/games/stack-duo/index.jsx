@@ -18,7 +18,7 @@ import { KIND } from '../../multiplayer/netProtocol.js';
 import { LOGICAL_W, LOGICAL_H, SCALE, makeGameState, fillQueue } from './state.js';
 import { tickSimulation, spawnInitialPieces } from './simulation.js';
 import { tickAI } from './ai.js';
-import { draw, drawLobby, drawCountdown, drawGameOver } from './render.js';
+import { draw, drawLobby, drawCountdown, drawGameOver, initSprites } from './render.js';
 
 // Key code → abstract action mapping
 const KEY_MAP = {
@@ -336,8 +336,10 @@ export default function StackDuo() {
     canvas.width = LOGICAL_W * SCALE;
     canvas.height = LOGICAL_H * SCALE;
     const ctx = canvas.getContext('2d');
-    ctx.imageSmoothingEnabled = false;
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
     ctx.setTransform(SCALE, 0, 0, SCALE, 0, 0);
+    initSprites();
 
     let raf = 0;
     let lastT = performance.now();
@@ -480,7 +482,7 @@ export default function StackDuo() {
       <canvas
         ref={canvasRef}
         className="border-2 border-gb-dark"
-        style={{ imageRendering: 'pixelated' }}
+        style={{}}
       />
       <div className="flex items-center gap-4">
         <button

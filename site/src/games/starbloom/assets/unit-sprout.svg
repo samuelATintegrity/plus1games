@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 8 8" width="8" height="8">
+  <style>
+    .tfs { fill: var(--team-fill, #c8a87c); stroke: var(--team-stroke, #6b4e2e) }
+  </style>
+  <!-- Sprout — small seedling worker, round body -->
+  <circle cx="4" cy="4.5" r="2.8" class="tfs" stroke-width="0.5"/>
+  <!-- Leaf sprout on top -->
+  <ellipse cx="4.8" cy="1.8" rx="1.2" ry="0.7" fill="#6abf4b" transform="rotate(-20 4.8 1.8)"/>
+  <line x1="4" y1="2.5" x2="4" y2="1.8" stroke="#3a8a28" stroke-width="0.5"/>
+  <!-- Eye -->
+  <circle cx="4" cy="4.2" r="0.6" fill="var(--team-stroke, #6b4e2e)"/>
+</svg>

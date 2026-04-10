@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 14 14" width="14" height="14">
+  <!-- Tiger (Inky) — orange with black stripes -->
+  <!-- Body -->
+  <path d="M3 4 Q3 1 7 1 Q11 1 11 4 L11 10 L10 9 L9 10 L8 9 L7 10 L6 9 L5 10 L4 9 L3 10 Z" fill="#e8a030" stroke="#a06010" stroke-width="0.4"/>
+  <!-- Stripes -->
+  <line x1="4" y1="3" x2="10" y2="3" stroke="#2a1a0a" stroke-width="0.7" opacity="0.6"/>
+  <line x1="3.5" y1="7" x2="10.5" y2="7" stroke="#2a1a0a" stroke-width="0.7" opacity="0.6"/>
+  <line x1="4" y1="9" x2="10" y2="9" stroke="#2a1a0a" stroke-width="0.7" opacity="0.5"/>
+  <!-- Eyes -->
+  <rect x="4" y="4" width="2.5" height="2.5" rx="0.5" fill="#fff"/>
+  <rect x="7.5" y="4" width="2.5" height="2.5" rx="0.5" fill="#fff"/>
+  <circle cx="5.8" cy="5.5" r="0.8" fill="#1a1a2e"/>
+  <circle cx="9.3" cy="5.5" r="0.8" fill="#1a1a2e"/>
+</svg>

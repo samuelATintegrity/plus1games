@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 14 14" width="14" height="14">
+  <!-- Ape (Blinky) — orange ghost with ear bumps -->
+  <!-- Ears -->
+  <circle cx="3.5" cy="3" r="1.5" fill="#e07045"/>
+  <circle cx="10.5" cy="3" r="1.5" fill="#e07045"/>
+  <!-- Body -->
+  <path d="M3 4 Q3 1 7 1 Q11 1 11 4 L11 10 L10 9 L9 10 L8 9 L7 10 L6 9 L5 10 L4 9 L3 10 Z" fill="#e07045" stroke="#a04020" stroke-width="0.4"/>
+  <!-- Eyes -->
+  <rect x="4" y="4" width="2.5" height="2.5" rx="0.5" fill="#fff"/>
+  <rect x="7.5" y="4" width="2.5" height="2.5" rx="0.5" fill="#fff"/>
+  <circle cx="5.8" cy="5.5" r="0.8" fill="#1a1a2e"/>
+  <circle cx="9.3" cy="5.5" r="0.8" fill="#1a1a2e"/>
+</svg>

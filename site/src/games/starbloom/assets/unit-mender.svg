@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 8 8" width="8" height="8">
+  <style>
+    .tfs { fill: var(--team-fill, #c8a87c); stroke: var(--team-stroke, #6b4e2e) }
+  </style>
+  <!-- Mender — cross/plus healer -->
+  <!-- Body circle -->
+  <circle cx="4" cy="4" r="3.2" class="tfs" stroke-width="0.5"/>
+  <!-- White healing cross -->
+  <rect x="3" y="1.5" width="2" height="5" rx="0.3" fill="#fff" opacity="0.9"/>
+  <rect x="1.5" y="3" width="5" height="2" rx="0.3" fill="#fff" opacity="0.9"/>
+  <!-- Cross inner highlight -->
+  <rect x="3.3" y="1.8" width="1.4" height="4.4" rx="0.2" fill="#e8f0e8" opacity="0.5"/>
+  <rect x="1.8" y="3.3" width="4.4" height="1.4" rx="0.2" fill="#e8f0e8" opacity="0.5"/>
+</svg>

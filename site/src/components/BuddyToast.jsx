@@ -42,7 +42,7 @@ export default function BuddyToast() {
   const gameName = prettyGameName(toast.gameId);
 
   return (
-    <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-4 py-2 bg-gb-darkest text-gb-lightest border border-gb-light text-[11px] flex items-center gap-3 shadow-lg">
+    <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-4 py-2 bg-gb-darkest text-gb-lightest border border-gb-light text-[11px] flex items-center gap-3 shadow-dsi">
       <span>
         <strong>{toast.nickname}</strong> jumped into <strong>{gameName}</strong>.
       </span>

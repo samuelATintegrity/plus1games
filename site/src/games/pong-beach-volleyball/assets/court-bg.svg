@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 240" width="320" height="240">
+  <!-- Sand court background -->
+  <rect width="320" height="240" fill="#f5deb3"/>
+
+  <!-- Sand texture dots -->
+  <g fill="#faecd4" opacity="0.6">
+    <circle cx="15" cy="45" r="0.5"/><circle cx="52" cy="98" r="0.5"/>
+    <circle cx="89" cy="51" r="0.5"/><circle cx="126" cy="104" r="0.5"/>
+    <circle cx="163" cy="57" r="0.5"/><circle cx="200" cy="110" r="0.5"/>
+    <circle cx="237" cy="63" r="0.5"/><circle cx="274" cy="116" r="0.5"/>
+    <circle cx="30" cy="140" r="0.5"/><circle cx="67" cy="193" r="0.5"/>
+    <circle cx="104" cy="146" r="0.5"/><circle cx="141" cy="199" r="0.5"/>
+    <circle cx="178" cy="152" r="0.5"/><circle cx="215" cy="205" r="0.5"/>
+    <circle cx="252" cy="158" r="0.5"/><circle cx="289" cy="211" r="0.5"/>
+    <circle cx="45" cy="70" r="0.5"/><circle cx="82" cy="123" r="0.5"/>
+    <circle cx="119" cy="76" r="0.5"/><circle cx="156" cy="129" r="0.5"/>
+    <circle cx="193" cy="82" r="0.5"/><circle cx="230" cy="135" r="0.5"/>
+    <circle cx="267" cy="88" r="0.5"/><circle cx="304" cy="141" r="0.5"/>
+    <circle cx="8" cy="165" r="0.5"/><circle cx="45" cy="218" r="0.5"/>
+    <circle cx="82" cy="171" r="0.5"/><circle cx="119" cy="224" r="0.5"/>
+    <circle cx="156" cy="177" r="0.5"/><circle cx="193" cy="230" r="0.5"/>
+  </g>
+
+  <!-- HUD strip at top -->
+  <rect x="0" y="0" width="320" height="24" fill="#0d1b2a"/>
+
+  <!-- Court outline -->
+  <rect x="2" y="28" width="316" height="200" fill="none" stroke="#0d1b2a" stroke-width="1"/>
+
+  <!-- Center dashed line -->
+  <line x1="160" y1="32" x2="160" y2="224" stroke="#c9a84c" stroke-width="1.5" stroke-dasharray="4,4" opacity="0.6"/>
+
+  <!-- Goal markers -->
+  <rect x="0" y="28" width="2" height="200" fill="#c94040" opacity="0.7"/>
+  <rect x="318" y="28" width="2" height="200" fill="#c94040" opacity="0.7"/>
+</svg>

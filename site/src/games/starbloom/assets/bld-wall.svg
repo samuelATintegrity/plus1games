@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 8 8" width="8" height="8">
+  <style>
+    .tf { fill: var(--team-fill, #c8a87c) }
+    .tfs { fill: var(--team-fill, #c8a87c); stroke: var(--team-stroke, #6b4e2e) }
+  </style>
+  <!-- Wall — solid fortification block -->
+  <rect x="0.3" y="0.3" width="7.4" height="7.4" rx="0.3" class="tfs" stroke-width="0.5"/>
+  <!-- Brick pattern -->
+  <line x1="0.5" y1="2.5" x2="7.5" y2="2.5" stroke="var(--team-stroke, #6b4e2e)" stroke-width="0.3"/>
+  <line x1="0.5" y1="5" x2="7.5" y2="5" stroke="var(--team-stroke, #6b4e2e)" stroke-width="0.3"/>
+  <line x1="4" y1="0.5" x2="4" y2="2.5" stroke="var(--team-stroke, #6b4e2e)" stroke-width="0.3"/>
+  <line x1="2" y1="2.5" x2="2" y2="5" stroke="var(--team-stroke, #6b4e2e)" stroke-width="0.3"/>
+  <line x1="6" y1="2.5" x2="6" y2="5" stroke="var(--team-stroke, #6b4e2e)" stroke-width="0.3"/>
+  <line x1="4" y1="5" x2="4" y2="7.5" stroke="var(--team-stroke, #6b4e2e)" stroke-width="0.3"/>
+  <!-- Top highlight -->
+  <rect x="0.5" y="0.5" width="7" height="1.5" rx="0.2" fill="#fff" opacity="0.1"/>
+</svg>

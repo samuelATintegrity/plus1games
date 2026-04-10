@@ -15,7 +15,7 @@ import { updateCursor, updateCamera, makeCursorState, cursorKeyDown, updateEdgeS
 import { cmdGatherFood, cmdGatherGold, cmdBuildMode, cmdBuildSelect, cmdBuildPlace, cmdAttackMode, cmdAttackTarget, cmdTrainMode, cmdTrain, cmdCancel, cmdSelect, cmdUpgrade, processShareKey, processRequestKey, processShareChoice, processRequestChoice } from './commands.js';
 import { tickSimulation } from './simulation.js';
 import { tickAI, initAI } from './ai.js';
-import { draw, drawMenu, drawGameOver, getButtonAtLogical, getSubButtons } from './render.js';
+import { draw, drawMenu, drawGameOver, getButtonAtLogical, getSubButtons, initSprites } from './render.js';
 import { updateFog } from './fog.js';
 import { resetDepletion } from './map.js';
 import { RtsNetController } from './net.js';
@@ -376,8 +376,12 @@ export default function Starbloom() {
     canvas.width = LOGICAL_W * SCALE;
     canvas.height = LOGICAL_H * SCALE;
     const ctx = canvas.getContext('2d');
-    ctx.imageSmoothingEnabled = false;
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
     ctx.setTransform(SCALE, 0, 0, SCALE, 0, 0);
+
+    // Load SVG sprites
+    initSprites().catch(() => {});
 
     if (!stateRef.current) {
       stateRef.current = { difficulty: 'medium' };
@@ -544,7 +548,7 @@ export default function Starbloom() {
         style={{
           width: LOGICAL_W * SCALE,
           height: LOGICAL_H * SCALE,
-          imageRendering: 'pixelated',
+          imageRendering: 'auto',
           cursor: 'crosshair',
         }}
       />

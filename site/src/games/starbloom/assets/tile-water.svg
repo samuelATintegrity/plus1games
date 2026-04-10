@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 8 8" width="8" height="8">
+  <!-- Water tile — blue with wave lines -->
+  <rect width="8" height="8" fill="#2277bb"/>
+  <rect x="0" y="0" width="8" height="4" fill="#2a88cc" opacity="0.3"/>
+  <!-- Wave patterns -->
+  <path d="M0 3 Q2 2 4 3 Q6 4 8 3" fill="none" stroke="#55aadd" stroke-width="0.6" opacity="0.6"/>
+  <path d="M0 5.5 Q2 4.5 4 5.5 Q6 6.5 8 5.5" fill="none" stroke="#55aadd" stroke-width="0.5" opacity="0.4"/>
+  <!-- Sparkle -->
+  <rect x="2" y="1.5" width="0.8" height="0.8" rx="0.4" fill="#aaddff" opacity="0.5"/>
+</svg>

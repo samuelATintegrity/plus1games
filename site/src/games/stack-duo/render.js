@@ -7,6 +7,24 @@ import {
   SHAPES, PLAYER_STYLES, C, currentSpeed,
 } from './state.js';
 import { ghostY } from './state.js';
+import { loadSprites } from '../../shared/spriteLoader.js';
+import blockP0Url from './assets/block-p0.svg';
+import blockP1Url from './assets/block-p1.svg';
+import blockP2Url from './assets/block-p2.svg';
+import blockP3Url from './assets/block-p3.svg';
+import blockGarbageUrl from './assets/block-garbage.svg';
+import blockGhostUrl from './assets/block-ghost.svg';
+
+// ---- Sprite cache ---------------------------------------------------------------
+
+let blockSprites = null;
+
+export async function initSprites() {
+  blockSprites = await loadSprites({
+    p0: blockP0Url, p1: blockP1Url, p2: blockP2Url, p3: blockP3Url,
+    garbage: blockGarbageUrl, ghost: blockGhostUrl,
+  });
+}
 
 // ---- Layout constants --------------------------------------------------------
 
@@ -203,7 +221,7 @@ function drawBoardBg(ctx, bx, by, board, blink) {
   ctx.strokeRect(bx - 1, by - 1, BOARD_PX_W + 2, BOARD_PX_H + 2);
 
   // Grid lines (subtle)
-  ctx.strokeStyle = '#1a4a1a';
+  ctx.strokeStyle = '#162d50';
   ctx.lineWidth = 0.5;
   for (let x = 1; x < BOARD_W; x++) {
     ctx.beginPath();
@@ -246,22 +264,29 @@ function drawBoardCells(ctx, board, bx, by) {
       const py = by + y * CELL;
       if (val === 5) {
         // Garbage cell
-        ctx.fillStyle = C.dark;
-        ctx.fillRect(px, py, CELL, CELL);
-        // Hatched pattern
-        ctx.strokeStyle = C.darkest;
-        ctx.lineWidth = 0.5;
-        ctx.beginPath();
-        ctx.moveTo(px, py + CELL);
-        ctx.lineTo(px + CELL, py);
-        ctx.stroke();
-        ctx.lineWidth = 1;
+        if (blockSprites) {
+          ctx.drawImage(blockSprites.garbage, px, py, CELL, CELL);
+        } else {
+          ctx.fillStyle = C.dark;
+          ctx.fillRect(px, py, CELL, CELL);
+          ctx.strokeStyle = C.darkest;
+          ctx.lineWidth = 0.5;
+          ctx.beginPath();
+          ctx.moveTo(px, py + CELL);
+          ctx.lineTo(px + CELL, py);
+          ctx.stroke();
+          ctx.lineWidth = 1;
+        }
       } else {
-        const style = PLAYER_STYLES[(val - 1) % 4];
-        ctx.fillStyle = style.fill;
-        ctx.fillRect(px + 1, py + 1, CELL - 2, CELL - 2);
-        ctx.strokeStyle = style.border;
-        ctx.strokeRect(px + 0.5, py + 0.5, CELL - 1, CELL - 1);
+        if (blockSprites) {
+          ctx.drawImage(blockSprites[`p${(val - 1) % 4}`], px, py, CELL, CELL);
+        } else {
+          const style = PLAYER_STYLES[(val - 1) % 4];
+          ctx.fillStyle = style.fill;
+          ctx.fillRect(px + 1, py + 1, CELL - 2, CELL - 2);
+          ctx.strokeStyle = style.border;
+          ctx.strokeRect(px + 0.5, py + 0.5, CELL - 1, CELL - 1);
+        }
       }
     }
   }
@@ -275,12 +300,16 @@ function drawActivePiece(ctx, player, bx, by) {
     const px = bx + (piece.x + offsets[i][0]) * CELL;
     const py = by + (piece.y + offsets[i][1]) * CELL;
     if (py < by) continue;
-    ctx.fillStyle = style.fill;
-    ctx.fillRect(px + 1, py + 1, CELL - 2, CELL - 2);
-    ctx.strokeStyle = style.border;
-    ctx.lineWidth = 1.5;
-    ctx.strokeRect(px + 0.5, py + 0.5, CELL - 1, CELL - 1);
-    ctx.lineWidth = 1;
+    if (blockSprites) {
+      ctx.drawImage(blockSprites[`p${player.index}`], px, py, CELL, CELL);
+    } else {
+      ctx.fillStyle = style.fill;
+      ctx.fillRect(px + 1, py + 1, CELL - 2, CELL - 2);
+      ctx.strokeStyle = style.border;
+      ctx.lineWidth = 1.5;
+      ctx.strokeRect(px + 0.5, py + 0.5, CELL - 1, CELL - 1);
+      ctx.lineWidth = 1;
+    }
   }
 }
 
@@ -295,10 +324,14 @@ function drawGhost(ctx, board, player, bx, by) {
     const px = bx + (piece.x + offsets[i][0]) * CELL;
     const py = by + (gy + offsets[i][1]) * CELL;
     if (py < by) continue;
-    ctx.fillStyle = style.fill;
-    ctx.fillRect(px + 1, py + 1, CELL - 2, CELL - 2);
-    ctx.strokeStyle = style.border;
-    ctx.strokeRect(px + 0.5, py + 0.5, CELL - 1, CELL - 1);
+    if (blockSprites) {
+      ctx.drawImage(blockSprites.ghost, px, py, CELL, CELL);
+    } else {
+      ctx.fillStyle = style.fill;
+      ctx.fillRect(px + 1, py + 1, CELL - 2, CELL - 2);
+      ctx.strokeStyle = style.border;
+      ctx.strokeRect(px + 0.5, py + 0.5, CELL - 1, CELL - 1);
+    }
   }
   ctx.globalAlpha = 1;
 }
@@ -355,10 +388,14 @@ function drawMiniPiece(ctx, type, playerIndex, px, py, small) {
   for (let i = 0; i < 4; i++) {
     const cx = ox + offsets[i][0] * s;
     const cy = oy + offsets[i][1] * s;
-    ctx.fillStyle = style.fill;
-    ctx.fillRect(cx, cy, s - 1, s - 1);
-    ctx.strokeStyle = style.border;
-    ctx.strokeRect(cx, cy, s - 1, s - 1);
+    if (blockSprites) {
+      ctx.drawImage(blockSprites[`p${playerIndex}`], cx, cy, s - 1, s - 1);
+    } else {
+      ctx.fillStyle = style.fill;
+      ctx.fillRect(cx, cy, s - 1, s - 1);
+      ctx.strokeStyle = style.border;
+      ctx.strokeRect(cx, cy, s - 1, s - 1);
+    }
   }
 }
 

@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24">
+  <!-- Team player — blue circle with white border -->
+  <circle cx="12" cy="12" r="10" fill="#4a90d9" stroke="#1a3a5c" stroke-width="1.5"/>
+  <!-- Inner highlight -->
+  <ellipse cx="10" cy="10" rx="5" ry="4" fill="#6fb3f0" opacity="0.35"/>
+  <!-- Jersey stripe -->
+  <line x1="7" y1="14" x2="17" y2="14" stroke="#eaf1f7" stroke-width="1" opacity="0.5"/>
+</svg>

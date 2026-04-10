@@ -4,16 +4,19 @@ export default {
   theme: {
     extend: {
       colors: {
-        // GameBoy DMG palette
+        // DSi-inspired palette (kept gb prefix for compat)
         gb: {
-          darkest: '#0f380f',
-          dark: '#306230',
-          light: '#8bac0f',
-          lightest: '#9bbc0f',
+          darkest: '#16213e',
+          dark: '#1a2744',
+          light: '#4fa3d1',
+          lightest: '#eaf1f7',
         },
       },
       fontFamily: {
         pixel: ['"Press Start 2P"', 'monospace'],
+      },
+      boxShadow: {
+        dsi: '0 2px 8px rgba(13, 27, 42, 0.4)',
       },
     },
   },

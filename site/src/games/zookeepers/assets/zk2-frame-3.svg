@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 14 14" width="14" height="14">
+  <!-- Zookeeper 2 — green Pac-Man + hat, mouth quarter open (closing) -->
+  <path d="M7 7.5 L12 6 A5 5 0 1 0 12 9 Z" fill="#6abf4b" stroke="#3a8a28" stroke-width="0.6"/>
+  <!-- Hat -->
+  <rect x="3.5" y="1.5" width="7" height="2" rx="0.5" fill="#3a8a28"/>
+  <rect x="5" y="0.5" width="4" height="2" rx="0.5" fill="#3a8a28"/>
+  <!-- Eye -->
+  <circle cx="8" cy="5" r="1" fill="#1a1a1a"/>
+  <circle cx="7.7" cy="4.7" r="0.35" fill="#fff"/>
+</svg>

@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 12 12" width="12" height="12">
+  <!-- Rocket ball — volleyball with glow effect -->
+  <!-- Glow -->
+  <circle cx="6" cy="6" r="5.5" fill="#ff6600" opacity="0.25"/>
+  <!-- Ball body -->
+  <circle cx="6" cy="6" r="5" fill="#fff0e0" stroke="#cc4400" stroke-width="0.8"/>
+  <!-- Panel seam -->
+  <line x1="1" y1="6" x2="11" y2="6" stroke="#cc4400" stroke-width="0.5" opacity="0.6"/>
+  <path d="M6 1 Q3 4 6 6 Q9 8 6 11" fill="none" stroke="#cc4400" stroke-width="0.4" opacity="0.5"/>
+  <!-- Hot highlight -->
+  <circle cx="4.5" cy="4" r="1.5" fill="#ffcc66" opacity="0.5"/>
+</svg>

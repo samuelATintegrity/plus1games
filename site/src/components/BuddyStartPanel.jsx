@@ -28,7 +28,7 @@ export default function BuddyStartPanel() {
   };
 
   return (
-    <div className="p-3 bg-gb-darkest text-gb-lightest border border-gb-light text-[10px] flex flex-col gap-2 max-w-[220px]">
+    <div className="p-3 bg-gb-darkest text-gb-lightest border border-gb-light text-[10px] flex flex-col gap-2 max-w-[220px] shadow-dsi">
       <div className="tracking-widest">PLAY WITH A BUDDY</div>
       <p className="text-gb-light leading-snug">
         Pair up to browse the arcade and join games together over the internet.

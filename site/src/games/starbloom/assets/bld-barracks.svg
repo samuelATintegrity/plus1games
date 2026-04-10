@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="16" height="16">
+  <style>
+    .tf { fill: var(--team-fill, #c8a87c) }
+    .ts { stroke: var(--team-stroke, #6b4e2e); fill: none }
+    .tfs { fill: var(--team-fill, #c8a87c); stroke: var(--team-stroke, #6b4e2e) }
+  </style>
+  <!-- Barracks — military training building with sword emblem -->
+  <rect x="1" y="2" width="14" height="13" rx="1" class="tfs" stroke-width="0.6"/>
+  <!-- Roof bar -->
+  <rect x="0.5" y="2" width="15" height="2.5" rx="0.5" fill="var(--team-stroke, #6b4e2e)"/>
+  <!-- Crossed swords emblem -->
+  <line x1="4" y1="5" x2="12" y2="13" stroke="var(--team-stroke, #6b4e2e)" stroke-width="0.8" stroke-linecap="round"/>
+  <line x1="12" y1="5" x2="4" y2="13" stroke="var(--team-stroke, #6b4e2e)" stroke-width="0.8" stroke-linecap="round"/>
+  <!-- Sword handles -->
+  <circle cx="4" cy="5" r="1" fill="var(--team-stroke, #6b4e2e)"/>
+  <circle cx="12" cy="5" r="1" fill="var(--team-stroke, #6b4e2e)"/>
+  <!-- Shield center -->
+  <circle cx="8" cy="9" r="2" class="tfs" stroke-width="0.5"/>
+</svg>

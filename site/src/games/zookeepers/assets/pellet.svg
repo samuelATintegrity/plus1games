@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 7 7" width="7" height="7">
+  <!-- Power pellet — bright pulsing orb -->
+  <circle cx="3.5" cy="3.5" r="2.5" fill="#ffeedd" opacity="0.3"/>
+  <circle cx="3.5" cy="3.5" r="1.8" fill="#ffddbb"/>
+  <circle cx="3" cy="3" r="0.8" fill="#fff" opacity="0.6"/>
+</svg>

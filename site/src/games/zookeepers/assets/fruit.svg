@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 7 7" width="7" height="7">
+  <!-- Cherry fruit -->
+  <!-- Stems -->
+  <path d="M3.5 1 Q4 0.5 4.5 1.5 L4 3" fill="none" stroke="#3a8a28" stroke-width="0.4"/>
+  <path d="M3.5 1 Q3 0.5 2.5 1.5 L3 3" fill="none" stroke="#3a8a28" stroke-width="0.4"/>
+  <!-- Leaf -->
+  <ellipse cx="3.5" cy="1" rx="1" ry="0.5" fill="#6abf4b"/>
+  <!-- Cherries -->
+  <circle cx="3" cy="4.5" r="1.8" fill="#cc3333" stroke="#aa2222" stroke-width="0.3"/>
+  <circle cx="5" cy="4" r="1.5" fill="#cc3333" stroke="#aa2222" stroke-width="0.3"/>
+  <!-- Highlights -->
+  <circle cx="2.5" cy="4" r="0.5" fill="#ff6666" opacity="0.5"/>
+  <circle cx="4.5" cy="3.5" r="0.4" fill="#ff6666" opacity="0.5"/>
+</svg>

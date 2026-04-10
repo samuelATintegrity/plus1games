@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 8 8" width="8" height="8">
+  <!-- Poof — death/impact burst, 4 expanding particles -->
+  <circle cx="4" cy="4" r="1.5" fill="#fff" opacity="0.6"/>
+  <!-- Burst rays -->
+  <circle cx="1.5" cy="4" r="0.8" fill="#ffeedd"/>
+  <circle cx="6.5" cy="4" r="0.8" fill="#ffeedd"/>
+  <circle cx="4" cy="1.5" r="0.8" fill="#ffeedd"/>
+  <circle cx="4" cy="6.5" r="0.8" fill="#ffeedd"/>
+  <!-- Diagonal sparks -->
+  <circle cx="2" cy="2" r="0.5" fill="#fff" opacity="0.5"/>
+  <circle cx="6" cy="6" r="0.5" fill="#fff" opacity="0.5"/>
+  <circle cx="6" cy="2" r="0.4" fill="#fff" opacity="0.4"/>
+  <circle cx="2" cy="6" r="0.4" fill="#fff" opacity="0.4"/>
+</svg>

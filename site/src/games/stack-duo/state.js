@@ -31,12 +31,12 @@ export const GARBAGE_TABLE = [0, 0, 1, 2, 4];
 // Scoring table: index = lines cleared
 export const SCORE_TABLE = [0, 100, 300, 500, 800];
 
-// ---- Palette (GameBoy DMG) ---------------------------------------------------
+// ---- Palette (DSi-inspired) --------------------------------------------------
 export const C = {
-  darkest:  '#0f380f',
-  dark:     '#306230',
-  light:    '#8bac0f',
-  lightest: '#9bbc0f',
+  darkest:  '#0d1b2a',
+  dark:     '#2b4162',
+  light:    '#5fa8d3',
+  lightest: '#d1e3f0',
 };
 
 // Player visual styles — distinguish pieces by border vs fill shade

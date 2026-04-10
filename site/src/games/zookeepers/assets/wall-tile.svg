@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 7 7" width="7" height="7">
+  <!-- Maze wall tile — deep navy with subtle border -->
+  <rect width="7" height="7" fill="#16213e"/>
+  <rect x="0.3" y="0.3" width="6.4" height="6.4" rx="0.3" fill="#1a2744"/>
+  <!-- Subtle inner highlight -->
+  <rect x="0.8" y="0.8" width="5.4" height="2.5" rx="0.2" fill="#1f2d4e" opacity="0.5"/>
+</svg>

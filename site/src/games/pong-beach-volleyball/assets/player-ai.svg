@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24">
+  <!-- AI player — red/orange circle with X mark -->
+  <circle cx="12" cy="12" r="10" fill="#c85a3a" stroke="#7a2e1a" stroke-width="1.5"/>
+  <!-- Inner highlight -->
+  <ellipse cx="10" cy="10" rx="5" ry="4" fill="#e08060" opacity="0.3"/>
+  <!-- X mark -->
+  <line x1="8" y1="8" x2="16" y2="16" stroke="#ffeedd" stroke-width="1.5" stroke-linecap="round"/>
+  <line x1="16" y1="8" x2="8" y2="16" stroke="#ffeedd" stroke-width="1.5" stroke-linecap="round"/>
+</svg>

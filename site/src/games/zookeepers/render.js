@@ -10,6 +10,46 @@ import {
   C, DIR, DX, DY,
 } from './state.js';
 
+import { loadSprites } from '../../shared/spriteLoader.js';
+
+// SVG asset imports
+import zk1Frame0Url from './assets/zk1-frame-0.svg';
+import zk1Frame1Url from './assets/zk1-frame-1.svg';
+import zk1Frame2Url from './assets/zk1-frame-2.svg';
+import zk1Frame3Url from './assets/zk1-frame-3.svg';
+import zk2Frame0Url from './assets/zk2-frame-0.svg';
+import zk2Frame1Url from './assets/zk2-frame-1.svg';
+import zk2Frame2Url from './assets/zk2-frame-2.svg';
+import zk2Frame3Url from './assets/zk2-frame-3.svg';
+import apeNormalUrl from './assets/ape-normal.svg';
+import rhinoNormalUrl from './assets/rhino-normal.svg';
+import tigerNormalUrl from './assets/tiger-normal.svg';
+import bearNormalUrl from './assets/bear-normal.svg';
+import animalFrightUrl from './assets/animal-fright.svg';
+import animalFrightBlinkUrl from './assets/animal-fright-blink.svg';
+import animalEatenUrl from './assets/animal-eaten.svg';
+import wallTileUrl from './assets/wall-tile.svg';
+import penGateUrl from './assets/pen-gate.svg';
+import pelletUrl from './assets/pellet.svg';
+import fruitUrl from './assets/fruit.svg';
+
+// ---- Sprite cache ------------------------------------------------------------
+
+let sprites = null;
+
+export async function initSprites() {
+  sprites = await loadSprites({
+    zk1f0: zk1Frame0Url, zk1f1: zk1Frame1Url, zk1f2: zk1Frame2Url, zk1f3: zk1Frame3Url,
+    zk2f0: zk2Frame0Url, zk2f1: zk2Frame1Url, zk2f2: zk2Frame2Url, zk2f3: zk2Frame3Url,
+    apeNormal: apeNormalUrl, rhinoNormal: rhinoNormalUrl,
+    tigerNormal: tigerNormalUrl, bearNormal: bearNormalUrl,
+    fright: animalFrightUrl, frightBlink: animalFrightBlinkUrl,
+    eaten: animalEatenUrl,
+    wallTile: wallTileUrl, penGate: penGateUrl,
+    pellet: pelletUrl, fruit: fruitUrl,
+  });
+}
+
 // ---- Public API --------------------------------------------------------------
 
 export function render(ctx, state) {
@@ -67,15 +107,24 @@ function drawMaze(ctx, state) {
   for (let row = 0; row < ROWS; row++) {
     for (let col = 0; col < COLS; col++) {
       const t = tiles[row * COLS + col];
+      const sx = MAZE_X + col * TILE_SIZE;
+      const sy = MAZE_Y + row * TILE_SIZE;
       if (t === TILE.WALL || t === TILE.PEN_WALL) {
-        ctx.fillStyle = C.darkest;
-        ctx.fillRect(MAZE_X + col * TILE_SIZE, MAZE_Y + row * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+        if (sprites) {
+          ctx.drawImage(sprites.wallTile, sx, sy, TILE_SIZE, TILE_SIZE);
+        } else {
+          ctx.fillStyle = C.darkest;
+          ctx.fillRect(sx, sy, TILE_SIZE, TILE_SIZE);
+        }
       }
       if (t === TILE.PEN_GATE) {
-        ctx.fillStyle = C.light;
-        const gx = MAZE_X + col * TILE_SIZE;
-        const gy = MAZE_Y + row * TILE_SIZE + TILE_SIZE - 2;
-        ctx.fillRect(gx, gy, TILE_SIZE, 2);
+        if (sprites) {
+          ctx.drawImage(sprites.penGate, sx, sy, TILE_SIZE, TILE_SIZE);
+        } else {
+          ctx.fillStyle = C.light;
+          const gy = sy + TILE_SIZE - 2;
+          ctx.fillRect(sx, gy, TILE_SIZE, 2);
+        }
       }
     }
   }
@@ -97,8 +146,14 @@ function drawDots(ctx, state) {
         ctx.fillStyle = C.lightest;
         ctx.fillRect(Math.floor(cx) - 0, Math.floor(cy) - 0, 1, 1);
       } else if (t === TILE.PELLET && pelletOn) {
-        ctx.fillStyle = C.lightest;
-        ctx.fillRect(Math.floor(cx) - 1, Math.floor(cy) - 1, 3, 3);
+        if (sprites) {
+          const px = MAZE_X + col * TILE_SIZE;
+          const py = MAZE_Y + row * TILE_SIZE;
+          ctx.drawImage(sprites.pellet, px, py, TILE_SIZE, TILE_SIZE);
+        } else {
+          ctx.fillStyle = C.lightest;
+          ctx.fillRect(Math.floor(cx) - 1, Math.floor(cy) - 1, 3, 3);
+        }
       }
     }
   }
@@ -108,14 +163,20 @@ function drawDots(ctx, state) {
 
 function drawFruit(ctx, state) {
   if (!state.fruitActive) return;
-  const cx = MAZE_X + state.fruitTileX * TILE_SIZE + TILE_SIZE / 2;
-  const cy = MAZE_Y + state.fruitTileY * TILE_SIZE + TILE_SIZE / 2;
-  // Simple diamond shape
-  ctx.fillStyle = C.lightest;
-  ctx.fillRect(Math.floor(cx) - 1, Math.floor(cy) - 2, 3, 1);
-  ctx.fillRect(Math.floor(cx) - 2, Math.floor(cy) - 1, 5, 1);
-  ctx.fillRect(Math.floor(cx) - 2, Math.floor(cy),     5, 1);
-  ctx.fillRect(Math.floor(cx) - 1, Math.floor(cy) + 1, 3, 1);
+  if (sprites) {
+    const fx = MAZE_X + state.fruitTileX * TILE_SIZE;
+    const fy = MAZE_Y + state.fruitTileY * TILE_SIZE;
+    ctx.drawImage(sprites.fruit, fx, fy, TILE_SIZE, TILE_SIZE);
+  } else {
+    const cx = MAZE_X + state.fruitTileX * TILE_SIZE + TILE_SIZE / 2;
+    const cy = MAZE_Y + state.fruitTileY * TILE_SIZE + TILE_SIZE / 2;
+    // Simple diamond shape
+    ctx.fillStyle = C.lightest;
+    ctx.fillRect(Math.floor(cx) - 1, Math.floor(cy) - 2, 3, 1);
+    ctx.fillRect(Math.floor(cx) - 2, Math.floor(cy) - 1, 5, 1);
+    ctx.fillRect(Math.floor(cx) - 2, Math.floor(cy),     5, 1);
+    ctx.fillRect(Math.floor(cx) - 1, Math.floor(cy) + 1, 3, 1);
+  }
 }
 
 // ---- Zookeepers --------------------------------------------------------------
@@ -128,28 +189,54 @@ function drawZookeepers(ctx, state) {
     }
     if (!zk.alive) continue;
 
-    const sx = MAZE_X + zk.x - TILE_SIZE / 2;
-    const sy = MAZE_Y + zk.y - TILE_SIZE / 2;
+    if (sprites) {
+      // SVG sprite rendering
+      const frame = zk.animFrame % 4;
+      const spriteKey = `zk${zk.index + 1}f${frame}`;
+      const img = sprites[spriteKey];
+      const drawSize = TILE_SIZE + 2; // ~9px to match original ~7px diameter + margin
+      const dx = MAZE_X + zk.x - drawSize / 2;
+      const dy = MAZE_Y + zk.y - drawSize / 2;
 
-    // Mouth animation: 4 frames (closed, quarter, half, quarter)
-    const mouthAngles = [0, 15, 30, 15];
-    const mouth = mouthAngles[zk.animFrame % 4];
-
-    // Determine colour: ZK1 = lightest, ZK2 = light
-    ctx.fillStyle = zk.index === 0 ? C.lightest : C.light;
-
-    if (mouth === 0) {
-      // Full circle
-      fillCircle(ctx, MAZE_X + zk.x, MAZE_Y + zk.y, 3);
+      ctx.save();
+      // SVGs face RIGHT; transform for other directions
+      switch (zk.dir) {
+        case DIR.LEFT:
+          ctx.translate(MAZE_X + zk.x, MAZE_Y + zk.y);
+          ctx.scale(-1, 1);
+          ctx.drawImage(img, -drawSize / 2, -drawSize / 2, drawSize, drawSize);
+          break;
+        case DIR.UP:
+          ctx.translate(MAZE_X + zk.x, MAZE_Y + zk.y);
+          ctx.rotate(-Math.PI / 2);
+          ctx.drawImage(img, -drawSize / 2, -drawSize / 2, drawSize, drawSize);
+          break;
+        case DIR.DOWN:
+          ctx.translate(MAZE_X + zk.x, MAZE_Y + zk.y);
+          ctx.rotate(Math.PI / 2);
+          ctx.drawImage(img, -drawSize / 2, -drawSize / 2, drawSize, drawSize);
+          break;
+        default: // RIGHT or NONE
+          ctx.drawImage(img, dx, dy, drawSize, drawSize);
+          break;
+      }
+      ctx.restore();
     } else {
-      // Pac-Man shape: circle with mouth wedge
-      drawPacShape(ctx, MAZE_X + zk.x, MAZE_Y + zk.y, 3, zk.dir, mouth, zk.index === 0 ? C.lightest : C.light);
-    }
+      // Procedural fallback
+      const mouthAngles = [0, 15, 30, 15];
+      const mouth = mouthAngles[zk.animFrame % 4];
+      ctx.fillStyle = zk.index === 0 ? C.lightest : C.light;
 
-    // Hat for ZK2 (visual distinction)
-    if (zk.index === 1) {
-      ctx.fillStyle = C.darkest;
-      ctx.fillRect(Math.floor(MAZE_X + zk.x) - 2, Math.floor(MAZE_Y + zk.y) - 4, 5, 1);
+      if (mouth === 0) {
+        fillCircle(ctx, MAZE_X + zk.x, MAZE_Y + zk.y, 3);
+      } else {
+        drawPacShape(ctx, MAZE_X + zk.x, MAZE_Y + zk.y, 3, zk.dir, mouth, zk.index === 0 ? C.lightest : C.light);
+      }
+
+      if (zk.index === 1) {
+        ctx.fillStyle = C.darkest;
+        ctx.fillRect(Math.floor(MAZE_X + zk.x) - 2, Math.floor(MAZE_Y + zk.y) - 4, 5, 1);
+      }
     }
   }
 }
@@ -215,25 +302,45 @@ function drawAnimals(ctx, state) {
     const ax = MAZE_X + a.x;
     const ay = MAZE_Y + a.y;
 
-    if (a.mode === 'eaten') {
-      // Eyes only
+    if (sprites) {
+      // SVG sprite rendering
+      const drawSize = TILE_SIZE + 2; // match zookeeper sizing
+      const dx = ax - drawSize / 2;
+      const dy = ay - drawSize / 2;
+      let img;
+
+      if (a.mode === 'eaten') {
+        img = sprites.eaten;
+      } else if (a.mode === 'frightened') {
+        const blinking = state.frightTimer < 2 && Math.floor(a.frightBlinkTimer * 6) % 2 === 1;
+        img = blinking ? sprites.frightBlink : sprites.fright;
+      } else {
+        // Normal mode — type-specific sprite
+        img = sprites[`${a.type}Normal`];
+      }
+
+      if (img) {
+        ctx.drawImage(img, dx, dy, drawSize, drawSize);
+      }
+    } else {
+      // Procedural fallback
+      if (a.mode === 'eaten') {
+        drawEyes(ctx, ax, ay, a.dir);
+        continue;
+      }
+
+      if (a.mode === 'frightened') {
+        const blinking = state.frightTimer < 2 && Math.floor(a.frightBlinkTimer * 6) % 2 === 1;
+        ctx.fillStyle = blinking ? C.dark : C.lightest;
+        fillGhostBody(ctx, ax, ay);
+        drawFrightenedFace(ctx, ax, ay, blinking);
+        continue;
+      }
+
+      ctx.fillStyle = C.light;
+      drawAnimalBody(ctx, ax, ay, a);
       drawEyes(ctx, ax, ay, a.dir);
-      continue;
     }
-
-    if (a.mode === 'frightened') {
-      // Frightened sprite — blink near end
-      const blinking = state.frightTimer < 2 && Math.floor(a.frightBlinkTimer * 6) % 2 === 1;
-      ctx.fillStyle = blinking ? C.dark : C.lightest;
-      fillGhostBody(ctx, ax, ay);
-      drawFrightenedFace(ctx, ax, ay, blinking);
-      continue;
-    }
-
-    // Normal animal — each type has a distinct look
-    ctx.fillStyle = C.light;
-    drawAnimalBody(ctx, ax, ay, a);
-    drawEyes(ctx, ax, ay, a.dir);
   }
 }
 
@@ -404,15 +511,27 @@ function drawLobby(ctx, state) {
   ctx.fillText('Share room code for online play', LOGICAL_W / 2, 158);
 
   // Zookeeper sprite preview
-  ctx.fillStyle = C.lightest;
-  fillCircle(ctx, LOGICAL_W / 2 - 55, 80, 4);
-  ctx.fillStyle = C.light;
-  fillCircle(ctx, LOGICAL_W / 2 + 55, 80, 4);
+  if (sprites) {
+    const previewSize = 9;
+    ctx.drawImage(sprites.zk1f2, LOGICAL_W / 2 - 55 - previewSize / 2, 80 - previewSize / 2, previewSize, previewSize);
+    ctx.drawImage(sprites.zk2f2, LOGICAL_W / 2 + 55 - previewSize / 2, 80 - previewSize / 2, previewSize, previewSize);
+  } else {
+    ctx.fillStyle = C.lightest;
+    fillCircle(ctx, LOGICAL_W / 2 - 55, 80, 4);
+    ctx.fillStyle = C.light;
+    fillCircle(ctx, LOGICAL_W / 2 + 55, 80, 4);
+  }
 
   // Animal sprite previews
-  ctx.fillStyle = C.light;
-  fillGhostBody(ctx, LOGICAL_W / 2 - 55, 130);
-  fillGhostBody(ctx, LOGICAL_W / 2 + 55, 130);
+  if (sprites) {
+    const previewSize = 9;
+    ctx.drawImage(sprites.apeNormal, LOGICAL_W / 2 - 55 - previewSize / 2, 130 - previewSize / 2, previewSize, previewSize);
+    ctx.drawImage(sprites.rhinoNormal, LOGICAL_W / 2 + 55 - previewSize / 2, 130 - previewSize / 2, previewSize, previewSize);
+  } else {
+    ctx.fillStyle = C.light;
+    fillGhostBody(ctx, LOGICAL_W / 2 - 55, 130);
+    fillGhostBody(ctx, LOGICAL_W / 2 + 55, 130);
+  }
 }
 
 // ---- Countdown ---------------------------------------------------------------

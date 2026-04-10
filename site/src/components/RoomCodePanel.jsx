@@ -39,7 +39,7 @@ export default function RoomCodePanel() {
 
   if (mode === 'idle') {
     return (
-      <div className="flex flex-col items-center gap-2 px-3 py-2 bg-gb-darkest border border-gb-dark">
+      <div className="flex flex-col items-center gap-2 px-3 py-2 bg-gb-darkest border border-gb-dark shadow-dsi">
         <span className="text-[9px] text-gb-light tracking-widest">PLAY WITH A FRIEND</span>
         <div className="flex gap-2">
           <button

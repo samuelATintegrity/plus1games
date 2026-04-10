@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 12 12" width="12" height="12">
+  <!-- Volleyball — white with red/blue panel lines -->
+  <circle cx="6" cy="6" r="5" fill="#f8f8f8" stroke="#555" stroke-width="0.6"/>
+  <!-- Panel seam lines -->
+  <line x1="1" y1="6" x2="11" y2="6" stroke="#c44" stroke-width="0.4" opacity="0.6"/>
+  <path d="M6 1 Q3 4 6 6 Q9 8 6 11" fill="none" stroke="#44c" stroke-width="0.4" opacity="0.5"/>
+  <!-- Highlight -->
+  <circle cx="4.5" cy="4" r="1.5" fill="white" opacity="0.5"/>
+</svg>

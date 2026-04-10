@@ -5,13 +5,30 @@ import { useLayoutMode } from '../layout/LayoutModeContext.jsx';
 import { useBuddy } from '../multiplayer/BuddyProvider.jsx';
 import { makePresence } from '../multiplayer/netProtocol.js';
 import BuddyStartPanel from '../components/BuddyStartPanel.jsx';
+import { loadSprites } from '../shared/spriteLoader.js';
 
-// GameBoy DMG palette
+// SVG asset imports (Vite resolves to URLs)
+import playerUrl from './assets/player.svg';
+import buddyUrl from './assets/buddy.svg';
+import cabinetPongUrl from './assets/cabinet-pong.svg';
+import cabinetStarbloomUrl from './assets/cabinet-starbloom.svg';
+import cabinetStackduoUrl from './assets/cabinet-stackduo.svg';
+import cabinetZookeepersUrl from './assets/cabinet-zookeepers.svg';
+
+// Cabinet SVG lookup by machine id
+const CABINET_URLS = {
+  'pong-beach-volleyball': cabinetPongUrl,
+  'starbloom': cabinetStarbloomUrl,
+  'stack-duo': cabinetStackduoUrl,
+  'zookeepers': cabinetZookeepersUrl,
+};
+
+// DSi-inspired palette (still used for floor dots, highlights, text)
 const PALETTE = {
-  darkest: '#0f380f',
-  dark: '#306230',
-  light: '#8bac0f',
-  lightest: '#9bbc0f',
+  darkest: '#16213e',
+  dark: '#1a2744',
+  light: '#4fa3d1',
+  lightest: '#eaf1f7',
 };
 
 const SPEED = 2.0;        // px/frame logical (~120 px/s at 60fps)
@@ -32,6 +49,7 @@ export default function ArcadeView() {
   const playerRef = useRef({ x: WORLD_WIDTH / 2, y: WORLD_HEIGHT / 2 });
   const keysRef = useRef({});
   const scaleRef = useRef(3);
+  const spritesRef = useRef(null);  // loaded SVG sprites
   const [nearMachine, setNearMachine] = useState(null);
 
   // Presence send state (survives across renders)
@@ -82,12 +100,28 @@ export default function ArcadeView() {
       canvas.style.width = `${WORLD_WIDTH * scale}px`;
       canvas.style.height = `${WORLD_HEIGHT * scale}px`;
       const ctx = canvas.getContext('2d');
-      ctx.imageSmoothingEnabled = false;
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'high';
       ctx.setTransform(scale, 0, 0, scale, 0, 0);
     };
     onResize();
     window.addEventListener('resize', onResize);
     return () => window.removeEventListener('resize', onResize);
+  }, []);
+
+  // Sprite loading
+  useEffect(() => {
+    const cabinetMap = {};
+    for (const m of machines) {
+      if (CABINET_URLS[m.id]) cabinetMap[`cab_${m.id}`] = CABINET_URLS[m.id];
+    }
+    loadSprites({
+      player: playerUrl,
+      buddy: buddyUrl,
+      ...cabinetMap,
+    }).then((loaded) => {
+      spritesRef.current = loaded;
+    });
   }, []);
 
   // Game loop
@@ -162,10 +196,12 @@ export default function ArcadeView() {
       }
 
       // --- Draw ---
+      const spr = spritesRef.current;
+
       ctx.fillStyle = PALETTE.lightest;
       ctx.fillRect(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
 
-      // Floor grid dots
+      // Floor grid dots (procedural — 1px dots)
       ctx.fillStyle = PALETTE.light;
       for (let y = 0; y < WORLD_HEIGHT; y += 16) {
         for (let x = 0; x < WORLD_WIDTH; x += 16) {
@@ -173,27 +209,31 @@ export default function ArcadeView() {
         }
       }
 
-      // Machines — cabinet sprites.
+      // Machines — SVG cabinet sprites
       for (const m of machines) {
-        ctx.fillStyle = PALETTE.dark;
-        ctx.fillRect(m.x - 8, m.y - 12, 16, 20);
-        ctx.fillStyle = PALETTE.light;
-        ctx.fillRect(m.x - 6, m.y - 10, 12, 8);
+        const cabSprite = spr && spr[`cab_${m.id}`];
+        if (cabSprite) {
+          ctx.drawImage(cabSprite, m.x - 8, m.y - 12, 16, 20);
+        } else {
+          // Fallback while sprites load
+          ctx.fillStyle = PALETTE.dark;
+          ctx.fillRect(m.x - 8, m.y - 12, 16, 20);
+          ctx.fillStyle = PALETTE.light;
+          ctx.fillRect(m.x - 6, m.y - 10, 12, 8);
+        }
         if (nearMachine && nearMachine.id === m.id) {
-          ctx.strokeStyle = PALETTE.darkest;
+          ctx.strokeStyle = PALETTE.lightest;
           ctx.lineWidth = 1;
           ctx.strokeRect(m.x - 9, m.y - 13, 18, 22);
         }
       }
 
-      // Remote buddies — interpolated pixels in a different palette shade.
+      // Remote buddies — SVG sprite with interpolation
       if (b.isActive) {
         const nowT = performance.now();
         const targetT = nowT - RENDER_DELAY_MS;
-        ctx.fillStyle = PALETTE.dark;
         for (const [, r] of b.remotePlayers) {
           if (r.curX == null) continue;
-          // Only render buddies currently in the arcade (not in a game).
           if (r.gameId) continue;
           let rx = r.curX;
           let ry = r.curY;
@@ -204,21 +244,29 @@ export default function ArcadeView() {
           } else if (targetT <= r.prevT && r.prevX != null) {
             rx = r.prevX; ry = r.prevY;
           }
-          ctx.fillRect(Math.round(rx) - 2, Math.round(ry) - 2, 4, 4);
+          if (spr && spr.buddy) {
+            ctx.drawImage(spr.buddy, Math.round(rx) - 4, Math.round(ry) - 5, 8, 8);
+          } else {
+            ctx.fillStyle = PALETTE.dark;
+            ctx.fillRect(Math.round(rx) - 2, Math.round(ry) - 2, 4, 4);
+          }
           // Name label
           if (r.nickname) {
             ctx.font = '6px monospace';
             ctx.textAlign = 'center';
             ctx.fillStyle = PALETTE.darkest;
-            ctx.fillText(r.nickname, Math.round(rx), Math.round(ry) - 5);
-            ctx.fillStyle = PALETTE.dark;
+            ctx.fillText(r.nickname, Math.round(rx), Math.round(ry) - 7);
           }
         }
       }
 
-      // Local player — dark pixel (always drawn on top of buddies)
-      ctx.fillStyle = PALETTE.darkest;
-      ctx.fillRect(Math.round(p.x) - 2, Math.round(p.y) - 2, 4, 4);
+      // Local player — SVG sprite (always drawn on top)
+      if (spr && spr.player) {
+        ctx.drawImage(spr.player, Math.round(p.x) - 4, Math.round(p.y) - 5, 8, 8);
+      } else {
+        ctx.fillStyle = PALETTE.darkest;
+        ctx.fillRect(Math.round(p.x) - 2, Math.round(p.y) - 2, 4, 4);
+      }
     };
     tick();
     return () => cancelAnimationFrame(raf);
@@ -228,7 +276,6 @@ export default function ArcadeView() {
     <div className="absolute inset-0 flex items-center justify-center bg-gb-darkest overflow-hidden">
       <canvas
         ref={canvasRef}
-        style={{ imageRendering: 'pixelated' }}
       />
 
       {/* Top-left: list button + title */}

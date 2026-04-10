@@ -11,7 +11,7 @@ import { useBuddy } from '../../multiplayer/BuddyProvider.jsx';
 import { LOGICAL_W, LOGICAL_H, SCALE, DIR, C } from './state.js';
 import { makeGameState } from './state.js';
 import { tickSimulation, startGame } from './simulation.js';
-import { render } from './render.js';
+import { render, initSprites } from './render.js';
 import { useGameSession } from './useGameSession.js';
 import { ZookeepersNetController } from './net.js';
 import { KIND } from '../../multiplayer/netProtocol.js';
@@ -38,7 +38,9 @@ export default function Zookeepers() {
     canvas.width = LOGICAL_W * SCALE;
     canvas.height = LOGICAL_H * SCALE;
     const ctx = canvas.getContext('2d');
-    ctx.imageSmoothingEnabled = false;
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+    initSprites();
   }, []);
 
   // ---- Game state init -------------------------------------------------------
@@ -300,7 +302,7 @@ export default function Zookeepers() {
     <div className="flex flex-col items-center gap-2">
       <canvas
         ref={canvasRef}
-        style={{ imageRendering: 'pixelated', width: LOGICAL_W * SCALE, height: LOGICAL_H * SCALE }}
+        style={{ width: LOGICAL_W * SCALE, height: LOGICAL_H * SCALE }}
       />
       {statusText && (
         <p className="text-gb-light text-xs font-mono">{statusText}</p>

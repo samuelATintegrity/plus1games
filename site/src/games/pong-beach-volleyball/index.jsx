@@ -24,6 +24,14 @@ import { useBuddy } from '../../multiplayer/BuddyProvider.jsx';
 import RoomCodePanel from '../../components/RoomCodePanel.jsx';
 import { PongNetController } from './net.js';
 import { useGameSession } from './useGameSession.js';
+import { loadSprites } from '../../shared/spriteLoader.js';
+
+// SVG asset imports
+import courtBgUrl from './assets/court-bg.svg';
+import playerTeamUrl from './assets/player-team.svg';
+import playerAiUrl from './assets/player-ai.svg';
+import ballUrl from './assets/ball.svg';
+import ballRocketUrl from './assets/ball-rocket.svg';
 
 // ---- constants --------------------------------------------------------------
 
@@ -74,12 +82,12 @@ const ROCKET_MAX_Y_RATIO = 1.5;
 
 const WIN_SCORE = 7;
 
-// GameBoy DMG palette (from tailwind.config.js `gb`)
+// DSi-inspired canvas palette
 const C = {
-  darkest: '#0f380f',
-  dark: '#306230',
-  light: '#8bac0f',
-  lightest: '#9bbc0f',
+  darkest: '#0d1b2a',
+  dark: '#2b4162',
+  light: '#5fa8d3',
+  lightest: '#d1e3f0',
 };
 
 // ---- helpers ----------------------------------------------------------------
@@ -168,6 +176,7 @@ export default function PongBeachVolleyball() {
   const game = useGameSession({ buddy, searchParams });
 
   const canvasRef = useRef(null);
+  const spritesRef = useRef(null);
   const stateRef = useRef(makeInitialState());
   const keysRef = useRef({});
   const phaseRef = useRef('menu');
@@ -355,8 +364,18 @@ export default function PongBeachVolleyball() {
     canvas.width = LOGICAL_W * SCALE;
     canvas.height = LOGICAL_H * SCALE;
     const ctx = canvas.getContext('2d');
-    ctx.imageSmoothingEnabled = false;
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
     ctx.setTransform(SCALE, 0, 0, SCALE, 0, 0);
+
+    // Load SVG sprites
+    loadSprites({
+      courtBg: courtBgUrl,
+      playerTeam: playerTeamUrl,
+      playerAi: playerAiUrl,
+      ball: ballUrl,
+      ballRocket: ballRocketUrl,
+    }).then((loaded) => { spritesRef.current = loaded; });
 
     let raf = 0;
     let lastT = performance.now();
@@ -440,7 +459,7 @@ export default function PongBeachVolleyball() {
         }
       }
 
-      draw(ctx, s, phaseRef.current, overlayRef.current, roleRef.current);
+      draw(ctx, s, phaseRef.current, overlayRef.current, roleRef.current, spritesRef.current);
     };
     raf = requestAnimationFrame(frame);
     return () => cancelAnimationFrame(raf);
@@ -461,7 +480,6 @@ export default function PongBeachVolleyball() {
       <canvas
         ref={canvasRef}
         className="border-2 border-gb-dark"
-        style={{ imageRendering: 'pixelated' }}
       />
       <div className="flex items-center gap-4">
         <button
@@ -795,52 +813,45 @@ function startServe(s, to) {
 
 // ---- draw -------------------------------------------------------------------
 
-function draw(ctx, s, phase, overlay, role) {
-  // Sand court background
-  ctx.fillStyle = C.light;
-  ctx.fillRect(0, 0, LOGICAL_W, LOGICAL_H);
-
-  // Deterministic sand texture
-  ctx.fillStyle = C.lightest;
-  for (let i = 0; i < 120; i++) {
-    const x = (i * 37) % LOGICAL_W;
-    const y = (i * 53 + 7) % LOGICAL_H;
-    ctx.fillRect(x, y, 1, 1);
+function draw(ctx, s, phase, overlay, role, spr) {
+  // Court background — SVG or fallback
+  if (spr && spr.courtBg) {
+    ctx.drawImage(spr.courtBg, 0, 0, LOGICAL_W, LOGICAL_H);
+  } else {
+    ctx.fillStyle = C.light;
+    ctx.fillRect(0, 0, LOGICAL_W, LOGICAL_H);
+    ctx.fillStyle = C.lightest;
+    for (let i = 0; i < 120; i++) {
+      const x = (i * 37) % LOGICAL_W;
+      const y = (i * 53 + 7) % LOGICAL_H;
+      ctx.fillRect(x, y, 1, 1);
+    }
+    ctx.fillStyle = C.darkest;
+    ctx.fillRect(0, 0, LOGICAL_W, COURT_TOP - 4);
+    ctx.strokeStyle = C.darkest;
+    ctx.lineWidth = 1;
+    ctx.strokeRect(2, COURT_TOP, LOGICAL_W - 4, COURT_BOTTOM - COURT_TOP);
+    ctx.fillStyle = C.dark;
+    for (let y = COURT_TOP + 4; y < COURT_BOTTOM - 2; y += 8) {
+      ctx.fillRect(MID_X - 1, y, 2, 4);
+    }
+    ctx.fillStyle = C.darkest;
+    ctx.fillRect(0, COURT_TOP, 2, COURT_BOTTOM - COURT_TOP);
+    ctx.fillRect(LOGICAL_W - 2, COURT_TOP, 2, COURT_BOTTOM - COURT_TOP);
   }
-
-  // HUD strip at top
-  ctx.fillStyle = C.darkest;
-  ctx.fillRect(0, 0, LOGICAL_W, COURT_TOP - 4);
-
-  // Court outline
-  ctx.strokeStyle = C.darkest;
-  ctx.lineWidth = 1;
-  ctx.strokeRect(2, COURT_TOP, LOGICAL_W - 4, COURT_BOTTOM - COURT_TOP);
-
-  // Center "line" (not a net — ball always crosses)
-  ctx.fillStyle = C.dark;
-  for (let y = COURT_TOP + 4; y < COURT_BOTTOM - 2; y += 8) {
-    ctx.fillRect(MID_X - 1, y, 2, 4);
-  }
-
-  // Goal markers at the extreme left/right edges so players can see where
-  // "past the opponent" actually is.
-  ctx.fillStyle = C.darkest;
-  ctx.fillRect(0, COURT_TOP, 2, COURT_BOTTOM - COURT_TOP);
-  ctx.fillRect(LOGICAL_W - 2, COURT_TOP, 2, COURT_BOTTOM - COURT_TOP);
 
   // Players
-  drawTeamPlayer(ctx, s.p1, '1');
-  drawTeamPlayer(ctx, s.p2, '2');
-  drawAIPlayer(ctx, s.ai1);
-  drawAIPlayer(ctx, s.ai2);
+  drawTeamPlayer(ctx, s.p1, '1', spr);
+  drawTeamPlayer(ctx, s.p2, '2', spr);
+  drawAIPlayer(ctx, s.ai1, spr);
+  drawAIPlayer(ctx, s.ai2, spr);
 
-  // Ball trail when in rocket mode
+  // Ball trail when in rocket mode (procedural)
   if (s.ball.rocket) {
     const mag = Math.sqrt(s.ball.vx * s.ball.vx + s.ball.vy * s.ball.vy) || 1;
     const nx = s.ball.vx / mag;
     const ny = s.ball.vy / mag;
-    ctx.strokeStyle = C.darkest;
+    ctx.strokeStyle = '#cc4400';
     ctx.lineWidth = 2;
     ctx.beginPath();
     ctx.moveTo(s.ball.x, s.ball.y);
@@ -848,18 +859,23 @@ function draw(ctx, s, phase, overlay, role) {
     ctx.stroke();
   }
 
-  // Ball
-  ctx.fillStyle = C.lightest;
-  ctx.beginPath();
-  ctx.arc(s.ball.x, s.ball.y, BALL_RADIUS, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.strokeStyle = C.darkest;
-  ctx.lineWidth = 1;
-  ctx.stroke();
-  ctx.beginPath();
-  ctx.moveTo(s.ball.x - BALL_RADIUS, s.ball.y);
-  ctx.lineTo(s.ball.x + BALL_RADIUS, s.ball.y);
-  ctx.stroke();
+  // Ball — SVG sprite or fallback
+  const ballSprite = spr && (s.ball.rocket ? spr.ballRocket : spr.ball);
+  if (ballSprite) {
+    ctx.drawImage(ballSprite, s.ball.x - BALL_RADIUS, s.ball.y - BALL_RADIUS, BALL_RADIUS * 2, BALL_RADIUS * 2);
+  } else {
+    ctx.fillStyle = C.lightest;
+    ctx.beginPath();
+    ctx.arc(s.ball.x, s.ball.y, BALL_RADIUS, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = C.darkest;
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(s.ball.x - BALL_RADIUS, s.ball.y);
+    ctx.lineTo(s.ball.x + BALL_RADIUS, s.ball.y);
+    ctx.stroke();
+  }
 
   // Hit counter label floating near the ball during either side's rally
   if (s.hits > 0 && s.hits < 3) {
@@ -920,34 +936,44 @@ function drawCenterBanner(ctx, title, sub) {
   ctx.fillText(sub, MID_X, LOGICAL_H / 2 + 10);
 }
 
-function drawTeamPlayer(ctx, p, label) {
-  ctx.fillStyle = C.lightest;
-  ctx.beginPath();
-  ctx.arc(p.x, p.y, PLAYER_RADIUS, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.strokeStyle = C.darkest;
-  ctx.lineWidth = 2;
-  ctx.stroke();
-  ctx.fillStyle = C.darkest;
+function drawTeamPlayer(ctx, p, label, spr) {
+  const r = PLAYER_RADIUS;
+  if (spr && spr.playerTeam) {
+    ctx.drawImage(spr.playerTeam, p.x - r, p.y - r, r * 2, r * 2);
+  } else {
+    ctx.fillStyle = C.lightest;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = C.darkest;
+    ctx.lineWidth = 2;
+    ctx.stroke();
+  }
+  // Number label always drawn on top
+  ctx.fillStyle = '#eaf1f7';
   ctx.font = 'bold 10px monospace';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.fillText(label, p.x, p.y + 1);
 }
 
-function drawAIPlayer(ctx, a) {
-  ctx.fillStyle = C.darkest;
-  ctx.beginPath();
-  ctx.arc(a.x, a.y, PLAYER_RADIUS, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.strokeStyle = C.lightest;
-  ctx.lineWidth = 1;
-  ctx.stroke();
-  // X mark
-  ctx.beginPath();
-  ctx.moveTo(a.x - 4, a.y - 4);
-  ctx.lineTo(a.x + 4, a.y + 4);
-  ctx.moveTo(a.x + 4, a.y - 4);
-  ctx.lineTo(a.x - 4, a.y + 4);
-  ctx.stroke();
+function drawAIPlayer(ctx, a, spr) {
+  const r = PLAYER_RADIUS;
+  if (spr && spr.playerAi) {
+    ctx.drawImage(spr.playerAi, a.x - r, a.y - r, r * 2, r * 2);
+  } else {
+    ctx.fillStyle = C.darkest;
+    ctx.beginPath();
+    ctx.arc(a.x, a.y, r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = C.lightest;
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(a.x - 4, a.y - 4);
+    ctx.lineTo(a.x + 4, a.y + 4);
+    ctx.moveTo(a.x + 4, a.y - 4);
+    ctx.lineTo(a.x - 4, a.y + 4);
+    ctx.stroke();
+  }
 }

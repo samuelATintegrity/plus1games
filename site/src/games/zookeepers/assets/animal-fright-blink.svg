@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 14 14" width="14" height="14">
+  <!-- Frightened animal blinking — white ghost (warning: about to recover) -->
+  <path d="M3 4 Q3 1 7 1 Q11 1 11 4 L11 10 L10 9 L9 10 L8 9 L7 10 L6 9 L5 10 L4 9 L3 10 Z" fill="#eaf1f7" stroke="#aabbcc" stroke-width="0.4"/>
+  <!-- Worried eyes (dark for contrast) -->
+  <circle cx="5" cy="5" r="0.8" fill="#cc3333"/>
+  <circle cx="9" cy="5" r="0.8" fill="#cc3333"/>
+  <!-- Zigzag mouth -->
+  <polyline points="4,8 5,7.5 6,8 7,7.5 8,8 9,7.5 10,8" fill="none" stroke="#cc3333" stroke-width="0.6" stroke-linejoin="round"/>
+</svg>

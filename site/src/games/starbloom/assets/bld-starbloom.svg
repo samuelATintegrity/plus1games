@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24">
+  <style>
+    .tf { fill: var(--team-fill, #c8a87c) }
+    .tfs { fill: var(--team-fill, #c8a87c); stroke: var(--team-stroke, #6b4e2e) }
+  </style>
+  <!-- Starbloom — golden wonder building, large star/flower -->
+  <!-- Base platform -->
+  <rect x="2" y="16" width="20" height="7" rx="1.5" class="tfs" stroke-width="0.6"/>
+  <!-- Tower body -->
+  <rect x="6" y="6" width="12" height="12" rx="1" class="tfs" stroke-width="0.6"/>
+  <!-- Golden star / bloom -->
+  <polygon points="12,1 14,8 21,8 15.5,12 17.5,19 12,15 6.5,19 8.5,12 3,8 10,8"
+    fill="#f0c040" stroke="#c89820" stroke-width="0.5" stroke-linejoin="round"/>
+  <!-- Inner glow -->
+  <circle cx="12" cy="11" r="3" fill="#ffeebb" opacity="0.6"/>
+  <!-- Center jewel -->
+  <circle cx="12" cy="11" r="1.5" fill="#f0c040" stroke="#c89820" stroke-width="0.4"/>
+  <!-- Sparkle accents -->
+  <circle cx="8" cy="5" r="0.5" fill="#fff" opacity="0.6"/>
+  <circle cx="16" cy="7" r="0.4" fill="#fff" opacity="0.5"/>
+  <circle cx="10" cy="18" r="0.4" fill="#fff" opacity="0.4"/>
+</svg>

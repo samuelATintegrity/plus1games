@@ -13,6 +13,80 @@ import { BUILDING_DEFS, UNIT_DEFS, BUILD_ORDER, TRAIN_TABLE, findEntity } from '
 import { UPGRADES } from './state.js';
 import { FOG, getFog } from './fog.js';
 
+import { loadSprites, createTeamVariant } from '../../shared/spriteLoader.js';
+
+// SVG asset imports — tiles
+import tileGrassUrl from './assets/tile-grass.svg';
+import tileForestUrl from './assets/tile-forest.svg';
+import tileRockUrl from './assets/tile-rock.svg';
+import tileWaterUrl from './assets/tile-water.svg';
+import tileBuiltUrl from './assets/tile-built.svg';
+
+// SVG asset imports — buildings
+import bldNestUrl from './assets/bld-nest.svg';
+import bldDepotUrl from './assets/bld-depot.svg';
+import bldBarracksUrl from './assets/bld-barracks.svg';
+import bldTowerUrl from './assets/bld-tower.svg';
+import bldWallUrl from './assets/bld-wall.svg';
+import bldAcademyUrl from './assets/bld-academy.svg';
+import bldStarbloomUrl from './assets/bld-starbloom.svg';
+
+// SVG asset imports — units
+import unitSproutUrl from './assets/unit-sprout.svg';
+import unitBonkerUrl from './assets/unit-bonker.svg';
+import unitLobberUrl from './assets/unit-lobber.svg';
+import unitStomperUrl from './assets/unit-stomper.svg';
+import unitMenderUrl from './assets/unit-mender.svg';
+
+// SVG asset imports — fx
+import fxPoofUrl from './assets/fx-poof.svg';
+import fxProjectileUrl from './assets/fx-projectile.svg';
+
+// ---- Sprite cache ---------------------------------------------------------------
+
+let sprites = null;
+
+const TEAM_COLORS = [
+  { fill: '#c8a87c', stroke: '#6b4e2e' },  // team 0 (Bloops) — warm brown (SVG defaults)
+  { fill: '#7b9eb8', stroke: '#3a5570' },  // team 1 (Zips)   — cool blue-gray
+];
+
+const BLD_URLS = {
+  nest: bldNestUrl, depot: bldDepotUrl, barracks: bldBarracksUrl,
+  tower: bldTowerUrl, wall: bldWallUrl, academy: bldAcademyUrl, starbloom: bldStarbloomUrl,
+};
+
+const UNIT_URLS = {
+  sprout: unitSproutUrl, bonker: unitBonkerUrl, lobber: unitLobberUrl,
+  stomper: unitStomperUrl, mender: unitMenderUrl,
+};
+
+export async function initSprites() {
+  // Load tile sprites (no team variants)
+  const tiles = await loadSprites({
+    grass: tileGrassUrl, forest: tileForestUrl, rock: tileRockUrl,
+    water: tileWaterUrl, built: tileBuiltUrl,
+  });
+
+  // Load building & unit sprites for both teams
+  // Team 0 uses SVG defaults (no override needed), team 1 gets color injection
+  const bldT0 = await loadSprites(BLD_URLS);
+  const unitT0 = await loadSprites(UNIT_URLS);
+
+  const bldT1 = {};
+  const unitT1 = {};
+  const t1 = TEAM_COLORS[1];
+  await Promise.all([
+    ...Object.entries(BLD_URLS).map(async ([k, url]) => { bldT1[k] = await createTeamVariant(url, t1); }),
+    ...Object.entries(UNIT_URLS).map(async ([k, url]) => { unitT1[k] = await createTeamVariant(url, t1); }),
+  ]);
+
+  // Load fx sprites (no team variants)
+  const fx = await loadSprites({ poof: fxPoofUrl, projectile: fxProjectileUrl });
+
+  sprites = { tiles, buildings: [bldT0, bldT1], units: [unitT0, unitT1], fx };
+}
+
 // ---- Command bar button definitions -----------------------------------------
 
 const BTN_W = 52;
@@ -180,6 +254,8 @@ export function drawGameOver(ctx, state, blinkPhase) {
 
 // ---- Tiles ------------------------------------------------------------------
 
+const TILE_SPRITE_MAP = { [TILE.GRASS]: 'grass', [TILE.FOREST]: 'forest', [TILE.ROCK]: 'rock', [TILE.WATER]: 'water', [TILE.BUILT]: 'built' };
+
 function drawTiles(ctx, state, camX, camY, fog) {
   const startTx = Math.max(0, Math.floor(camX / TILE_SIZE));
   const startTy = Math.max(0, Math.floor(camY / TILE_SIZE));
@@ -201,45 +277,49 @@ function drawTiles(ctx, state, camX, camY, fog) {
 
       // Draw terrain (EXPLORED or VISIBLE)
       const tile = state.map.getTile(tx, ty);
-      switch (tile) {
-        case TILE.GRASS:
-          ctx.fillStyle = C.lightest;
-          ctx.fillRect(sx, sy, TILE_SIZE, TILE_SIZE);
-          // Texture dots
-          if ((tx + ty * 7) % 11 === 0) {
+      const tileKey = TILE_SPRITE_MAP[tile];
+
+      if (sprites && tileKey && sprites.tiles[tileKey]) {
+        ctx.drawImage(sprites.tiles[tileKey], sx, sy, TILE_SIZE, TILE_SIZE);
+      } else {
+        // Procedural fallback
+        switch (tile) {
+          case TILE.GRASS:
+            ctx.fillStyle = C.lightest;
+            ctx.fillRect(sx, sy, TILE_SIZE, TILE_SIZE);
+            if ((tx + ty * 7) % 11 === 0) {
+              ctx.fillStyle = C.light;
+              ctx.fillRect(sx + 3, sy + 3, 1, 1);
+            }
+            break;
+          case TILE.FOREST:
+            ctx.fillStyle = C.dark;
+            ctx.fillRect(sx, sy, TILE_SIZE, TILE_SIZE);
             ctx.fillStyle = C.light;
-            ctx.fillRect(sx + 3, sy + 3, 1, 1);
-          }
-          break;
-        case TILE.FOREST:
-          ctx.fillStyle = C.dark;
-          ctx.fillRect(sx, sy, TILE_SIZE, TILE_SIZE);
-          // Tree canopy
-          ctx.fillStyle = C.light;
-          ctx.fillRect(sx + 2, sy + 1, 4, 3);
-          ctx.fillStyle = C.darkest;
-          ctx.fillRect(sx + 3, sy + 5, 2, 2);
-          break;
-        case TILE.ROCK:
-          ctx.fillStyle = C.light;
-          ctx.fillRect(sx, sy, TILE_SIZE, TILE_SIZE);
-          // Ore dots
-          ctx.fillStyle = C.darkest;
-          ctx.fillRect(sx + 1, sy + 2, 2, 2);
-          ctx.fillRect(sx + 5, sy + 4, 2, 2);
-          break;
-        case TILE.WATER:
-          ctx.fillStyle = C.darkest;
-          ctx.fillRect(sx, sy, TILE_SIZE, TILE_SIZE);
-          // Wave pattern
-          ctx.fillStyle = C.dark;
-          const waveOff = (state.tick * 0.1 + tx) % 6;
-          ctx.fillRect(sx + waveOff, sy + 3, 2, 1);
-          break;
-        case TILE.BUILT:
-          ctx.fillStyle = C.lightest;
-          ctx.fillRect(sx, sy, TILE_SIZE, TILE_SIZE);
-          break;
+            ctx.fillRect(sx + 2, sy + 1, 4, 3);
+            ctx.fillStyle = C.darkest;
+            ctx.fillRect(sx + 3, sy + 5, 2, 2);
+            break;
+          case TILE.ROCK:
+            ctx.fillStyle = C.light;
+            ctx.fillRect(sx, sy, TILE_SIZE, TILE_SIZE);
+            ctx.fillStyle = C.darkest;
+            ctx.fillRect(sx + 1, sy + 2, 2, 2);
+            ctx.fillRect(sx + 5, sy + 4, 2, 2);
+            break;
+          case TILE.WATER:
+            ctx.fillStyle = C.darkest;
+            ctx.fillRect(sx, sy, TILE_SIZE, TILE_SIZE);
+            ctx.fillStyle = C.dark;
+            // eslint-disable-next-line no-case-declarations
+            const waveOff = (state.tick * 0.1 + tx) % 6;
+            ctx.fillRect(sx + waveOff, sy + 3, 2, 1);
+            break;
+          case TILE.BUILT:
+            ctx.fillStyle = C.lightest;
+            ctx.fillRect(sx, sy, TILE_SIZE, TILE_SIZE);
+            break;
+        }
       }
 
       // Territory indicator: dot near friendly buildings (only if VISIBLE)
@@ -346,6 +426,20 @@ function drawBuildings(ctx, state, camX, camY, localPlayerIdx, blinkPhase, fog, 
 }
 
 function drawBuildingSprite(ctx, b, sx, sy, w, h, team, blinkPhase) {
+  // SVG sprite rendering
+  if (sprites && sprites.buildings[team] && sprites.buildings[team][b.type]) {
+    ctx.drawImage(sprites.buildings[team][b.type], sx, sy, w, h);
+    // Starbloom pulse overlay
+    if (blinkPhase && b.type === 'starbloom') {
+      ctx.fillStyle = C.lightest;
+      ctx.globalAlpha = 0.15;
+      ctx.fillRect(sx, sy, w, h);
+      ctx.globalAlpha = 1;
+    }
+    return;
+  }
+
+  // Procedural fallback
   const fill = team === 0 ? C.lightest : C.dark;
   const outline = team === 0 ? C.darkest : C.lightest;
   const pulse = blinkPhase && (b.type === 'starbloom');
@@ -489,6 +583,16 @@ function drawUnits(ctx, state, camX, camY, localPlayerIdx, blinkPhase, fog, loca
 }
 
 function drawUnitSprite(ctx, unit, x, y, team, state) {
+  // SVG sprite rendering
+  if (sprites && sprites.units[team] && sprites.units[team][unit.type]) {
+    const isStomper = unit.type === 'stomper';
+    const size = isStomper ? 10 : 8;
+    const half = size / 2;
+    ctx.drawImage(sprites.units[team][unit.type], x - half, y - half, size, size);
+    return;
+  }
+
+  // Procedural fallback
   const fill = team === 0 ? C.lightest : C.dark;
   const outline = team === 0 ? C.darkest : C.lightest;
 
@@ -497,19 +601,16 @@ function drawUnitSprite(ctx, unit, x, y, team, state) {
 
   switch (unit.type) {
     case 'sprout':
-      // Small circle
       ctx.beginPath();
       ctx.arc(x, y, 2, 0, Math.PI * 2);
       ctx.fill();
       ctx.stroke();
       break;
     case 'bonker':
-      // Square
       ctx.fillRect(x - 2, y - 2, 5, 5);
       ctx.strokeRect(x - 2, y - 2, 5, 5);
       break;
     case 'lobber':
-      // Triangle
       ctx.beginPath();
       ctx.moveTo(x, y - 3);
       ctx.lineTo(x + 3, y + 2);
@@ -519,15 +620,12 @@ function drawUnitSprite(ctx, unit, x, y, team, state) {
       ctx.stroke();
       break;
     case 'stomper':
-      // Large filled square
       ctx.fillRect(x - 3, y - 3, 6, 6);
       ctx.strokeRect(x - 3, y - 3, 6, 6);
-      // Inner detail
       ctx.fillStyle = outline;
       ctx.fillRect(x - 1, y - 1, 2, 2);
       break;
     case 'mender':
-      // Cross/plus
       ctx.fillRect(x - 1, y - 3, 2, 6);
       ctx.fillRect(x - 3, y - 1, 6, 2);
       break;
@@ -603,22 +701,31 @@ function drawParticles(ctx, state, camX, camY) {
     const sy = p.y - camY + VP_Y;
 
     if (p.type === 'poof') {
-      const r = Math.floor(p.frame) + 1;
-      ctx.fillStyle = C.lightest;
-      ctx.globalAlpha = 1 - (p.frame / p.maxFrame);
-      // 4 dots expanding outward
-      ctx.fillRect(sx - r, sy, 1, 1);
-      ctx.fillRect(sx + r, sy, 1, 1);
-      ctx.fillRect(sx, sy - r, 1, 1);
-      ctx.fillRect(sx, sy + r, 1, 1);
+      const progress = p.frame / p.maxFrame;
+      ctx.globalAlpha = 1 - progress;
+      if (sprites && sprites.fx.poof) {
+        const size = 4 + progress * 6; // expand from 4 to 10
+        ctx.drawImage(sprites.fx.poof, sx - size / 2, sy - size / 2, size, size);
+      } else {
+        const r = Math.floor(p.frame) + 1;
+        ctx.fillStyle = C.lightest;
+        ctx.fillRect(sx - r, sy, 1, 1);
+        ctx.fillRect(sx + r, sy, 1, 1);
+        ctx.fillRect(sx, sy - r, 1, 1);
+        ctx.fillRect(sx, sy + r, 1, 1);
+      }
       ctx.globalAlpha = 1;
     } else if (p.type === 'projectile') {
       // Lerp from source to target
       const t = p.frame / p.maxFrame;
       const px = p.x + (p.tx - p.x) * t - camX + VP_X;
       const py = p.y + (p.ty - p.y) * t - camY + VP_Y;
-      ctx.fillStyle = C.lightest;
-      ctx.fillRect(px, py, 2, 2);
+      if (sprites && sprites.fx.projectile) {
+        ctx.drawImage(sprites.fx.projectile, px - 2, py - 2, 4, 4);
+      } else {
+        ctx.fillStyle = C.lightest;
+        ctx.fillRect(px, py, 2, 2);
+      }
     }
   }
 }

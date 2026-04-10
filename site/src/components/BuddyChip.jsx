@@ -21,13 +21,13 @@ export default function BuddyChip() {
   return (
     <div className="fixed top-3 right-3 z-50 flex flex-col items-end gap-2">
       {buddy.isFull && (
-        <div className="px-3 py-1 text-[10px] bg-gb-darkest text-gb-lightest border border-gb-light">
+        <div className="px-3 py-1 text-[10px] bg-gb-darkest text-gb-lightest border border-gb-light shadow-dsi">
           THIS BUDDY PASS IS FULL
         </div>
       )}
 
       {buddy.isActive && (
-        <div className="flex items-center gap-2 px-2 py-1 bg-gb-darkest text-gb-lightest border border-gb-light text-[10px]">
+        <div className="flex items-center gap-2 px-2 py-1 bg-gb-darkest text-gb-lightest border border-gb-light text-[10px] shadow-dsi">
           {/* Local nickname (editable) */}
           {editing ? (
             <input
@@ -95,7 +95,7 @@ function Dot({ connected }) {
   return (
     <span
       className="inline-block w-2 h-2 rounded-full"
-      style={{ backgroundColor: connected ? '#9bbc0f' : '#306230' }}
+      style={{ backgroundColor: connected ? '#eaf1f7' : '#1a2744' }}
     />
   );
 }
@@ -113,7 +113,7 @@ function SharePopover({ url, code, onClose }) {
   };
 
   return (
-    <div className="w-72 p-3 bg-gb-darkest text-gb-lightest border border-gb-light text-[10px] flex flex-col gap-2">
+    <div className="w-72 p-3 bg-gb-darkest text-gb-lightest border border-gb-light text-[10px] flex flex-col gap-2 shadow-dsi">
       <div className="flex items-center justify-between">
         <span className="tracking-widest">INVITE A BUDDY</span>
         <button onClick={onClose} className="hover:text-gb-light">×</button>

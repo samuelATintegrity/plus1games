@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 14 14" width="14" height="14">
+  <!-- Zookeeper 1 — yellow Pac-Man, mouth half open (30 deg) -->
+  <path d="M7 7 L12.5 3.5 A5.5 5.5 0 1 0 12.5 10.5 Z" fill="#f0c040" stroke="#c89820" stroke-width="0.6"/>
+  <!-- Eye -->
+  <circle cx="8" cy="4.5" r="1" fill="#1a1a1a"/>
+  <circle cx="7.7" cy="4.2" r="0.35" fill="#fff"/>
+</svg>
