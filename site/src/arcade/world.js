@@ -12,6 +12,27 @@ export const machines = [
     y: 120,
     gameRoute: '/games/pong-beach-volleyball',
   },
+  {
+    id: 'starbloom',
+    name: 'Starbloom',
+    x: 176,
+    y: 120,
+    gameRoute: '/games/starbloom',
+  },
+  {
+    id: 'stack-duo',
+    name: 'StackDuo',
+    x: 128,
+    y: 180,
+    gameRoute: '/games/stack-duo',
+  },
+  {
+    id: 'zookeepers',
+    name: 'Zookeepers',
+    x: 224,
+    y: 180,
+    gameRoute: '/games/zookeepers',
+  },
 ];
 
 // Logical world dimensions (GameBoy native res).

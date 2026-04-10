@@ -1,0 +1,17 @@
+{
+  "id": "starbloom",
+  "name": "Starbloom",
+  "originalBaseGame": "RTS",
+  "coopSpin": "2v2 teams share resources and coordinate one-command-at-a-time strategy to bloom across the map",
+  "winRules": "Build the Starbloom wonder and survive the 5-minute countdown, or eliminate the enemy team by destroying all their buildings",
+  "turnRules": "real-time",
+  "moveRules": "Each player controls a cursor to select and command units/buildings one at a time. Units auto-execute commands until given new orders. Commands: Move, Attack, Gather, Build, Train, Educate.",
+  "setupInstructions": "Each player starts with a Nest (base) and 3 Sprout (villager) units. Gather Food and Gold from resource nodes to build structures and train military units.",
+  "playerCount": 2,
+  "buildComplexity": "large",
+  "artStyleNotes": "GameBoy DMG 4-color palette. 8x8 pixel tiles on a 64x64 map. Bloops faction uses round/organic shapes (lightest fill), Zips faction uses angular/geometric shapes (dark fill). Units are 3-5px sprites. Buildings are 8x8 to 24x24. Non-violent poof effects.",
+  "status": "building",
+  "createdAt": "2026-04-09T00:00:00Z",
+  "approvedAt": "2026-04-09T00:00:00Z",
+  "deployedAt": null
+}

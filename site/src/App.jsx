@@ -7,6 +7,9 @@ import { LayoutModeProvider } from './layout/LayoutModeContext.jsx';
 import { BuddyProvider } from './multiplayer/BuddyProvider.jsx';
 
 const PongBeachVolleyball = lazy(() => import('./games/pong-beach-volleyball/index.jsx'));
+const Starbloom = lazy(() => import('./games/starbloom/index.jsx'));
+const StackDuo = lazy(() => import('./games/stack-duo/index.jsx'));
+const Zookeepers = lazy(() => import('./games/zookeepers/index.jsx'));
 
 export default function App() {
   return (
@@ -22,6 +25,30 @@ export default function App() {
               element={
                 <Suspense fallback={<div className="text-gb-light text-xs">Loading…</div>}>
                   <PongBeachVolleyball />
+                </Suspense>
+              }
+            />
+            <Route
+              path="/games/starbloom"
+              element={
+                <Suspense fallback={<div className="text-gb-light text-xs">Loading…</div>}>
+                  <Starbloom />
+                </Suspense>
+              }
+            />
+            <Route
+              path="/games/stack-duo"
+              element={
+                <Suspense fallback={<div className="text-gb-light text-xs">Loading…</div>}>
+                  <StackDuo />
+                </Suspense>
+              }
+            />
+            <Route
+              path="/games/zookeepers"
+              element={
+                <Suspense fallback={<div className="text-gb-light text-xs">Loading…</div>}>
+                  <Zookeepers />
                 </Suspense>
               }
             />

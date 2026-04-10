@@ -20,6 +20,25 @@ export const KIND = {
   PONG_INPUT: 'pong-input',
   PONG_SNAPSHOT: 'pong-snapshot',
   PONG_REQUEST_STATE: 'pong-request-state',
+  // RTS (Starbloom) channel
+  RTS_READY: 'rts-ready',
+  RTS_COMMAND: 'rts-command',
+  RTS_SNAPSHOT: 'rts-snapshot',
+  RTS_REQUEST_STATE: 'rts-request-state',
+  // StackDuo channel
+  STACKDUO_READY: 'sd-ready',
+  STACKDUO_INPUT: 'sd-input',
+  STACKDUO_SNAPSHOT: 'sd-snapshot',
+  STACKDUO_LOBBY: 'sd-lobby',
+  STACKDUO_LOBBY_ACTION: 'sd-laction',
+  STACKDUO_REQUEST_STATE: 'sd-req',
+  // Zookeepers channel
+  ZOO_READY: 'zoo-ready',
+  ZOO_INPUT: 'zoo-input',
+  ZOO_SNAPSHOT: 'zoo-snap',
+  ZOO_LOBBY: 'zoo-lobby',
+  ZOO_LOBBY_ACTION: 'zoo-laction',
+  ZOO_REQUEST_STATE: 'zoo-req',
 };
 
 // ---- Message factories ------------------------------------------------------
@@ -70,6 +89,22 @@ export function makePongSnapshot(seq, state) {
 
 export function makePongRequestState() {
   return { kind: KIND.PONG_REQUEST_STATE, t: Date.now() };
+}
+
+export function makeRtsReady({ myId, committedRole = null }) {
+  return { kind: KIND.RTS_READY, t: Date.now(), myId, committedRole };
+}
+
+export function makeRtsCommand({ command }) {
+  return { kind: KIND.RTS_COMMAND, t: Date.now(), command };
+}
+
+export function makeRtsSnapshot(seq, snapshot) {
+  return { kind: KIND.RTS_SNAPSHOT, t: Date.now(), seq, ...snapshot };
+}
+
+export function makeRtsRequestState() {
+  return { kind: KIND.RTS_REQUEST_STATE, t: Date.now() };
 }
 
 function pickEntity(e) {
@@ -127,4 +162,56 @@ export function parseShortCode(raw) {
   if (cleaned.length !== 6) return null;
   for (const c of cleaned) if (!BASE32_ALPHABET.includes(c)) return null;
   return cleaned;
+}
+
+// ---- StackDuo message factories ---------------------------------------------
+
+export function makeStackDuoReady({ myId, committedRole = null }) {
+  return { kind: KIND.STACKDUO_READY, t: Date.now(), myId, committedRole };
+}
+
+export function makeStackDuoInput({ playerIndex, keys }) {
+  return { kind: KIND.STACKDUO_INPUT, t: Date.now(), playerIndex, keys };
+}
+
+export function makeStackDuoSnapshot(seq, snapshot) {
+  return { kind: KIND.STACKDUO_SNAPSHOT, t: Date.now(), seq, ...snapshot };
+}
+
+export function makeStackDuoLobby(lobbyState) {
+  return { kind: KIND.STACKDUO_LOBBY, t: Date.now(), ...lobbyState };
+}
+
+export function makeStackDuoLobbyAction(action) {
+  return { kind: KIND.STACKDUO_LOBBY_ACTION, t: Date.now(), ...action };
+}
+
+export function makeStackDuoRequestState() {
+  return { kind: KIND.STACKDUO_REQUEST_STATE, t: Date.now() };
+}
+
+// ---- Zookeepers message factories -------------------------------------------
+
+export function makeZooReady({ myId, committedRole = null }) {
+  return { kind: KIND.ZOO_READY, t: Date.now(), myId, committedRole };
+}
+
+export function makeZooInput({ playerIndex, dir }) {
+  return { kind: KIND.ZOO_INPUT, t: Date.now(), playerIndex, dir };
+}
+
+export function makeZooSnapshot(seq, snapshot) {
+  return { kind: KIND.ZOO_SNAPSHOT, t: Date.now(), seq, ...snapshot };
+}
+
+export function makeZooLobby(lobbyState) {
+  return { kind: KIND.ZOO_LOBBY, t: Date.now(), ...lobbyState };
+}
+
+export function makeZooLobbyAction(action) {
+  return { kind: KIND.ZOO_LOBBY_ACTION, t: Date.now(), ...action };
+}
+
+export function makeZooRequestState() {
+  return { kind: KIND.ZOO_REQUEST_STATE, t: Date.now() };
 }
